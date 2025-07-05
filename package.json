@@ -1,0 +1,53 @@
+{
+  "name": "@tylercoles/mcp-framework",
+  "version": "0.1.0",
+  "description": "A modular framework for building Model Context Protocol (MCP) servers",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylercoles/mcp-framework.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "llm",
+    "framework",
+    "typescript"
+  ],
+  "author": "Tyler Coles",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "build:order": "node tools/build-workspaces.js",
+    "test": "npm run test --workspaces --if-present",
+    "test:all": "node tools/test-all.js",
+    "test:coverage": "npm run test --workspaces --if-present -- --coverage",
+    "coverage:report": "node tools/coverage-report.js",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "node tools/clean-workspace.js",
+    "dev": "npm run dev --workspaces --if-present",
+    "typecheck": "tsc --noEmit",
+    "verify": "node tools/verify-workspaces.js",
+    "publish:packages": "node tools/publish-packages.js",
+    "prepare": "npm run build",
+    "ws": "npm --workspaces",
+    "ws:info": "npm ls --depth=0",
+    "security:audit": "node tools/security-audit.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.0",
+    "ts-jest": "^29.1.1",
+    "rimraf": "^5.0.5"
+  }
+}

@@ -1,0 +1,145 @@
+
+services:
+  # NATS Server with JetStream and KV support
+  nats:
+    image: nats:2.10-alpine
+    container_name: mcp-memories-nats
+    command: [
+      "nats-server",
+      "--jetstream",
+      "--store_dir=/data",
+      "--http_port=8222",
+      "--port=4222",
+      "--cluster_name=mcp-cluster"
+    ]
+    ports:
+      - "4222:4222"  # NATS client port
+      - "8222:8222"  # HTTP monitoring port
+    volumes:
+      - ${NATS_DATA_PATH:-./data/nats}:/data
+    environment:
+      - NATS_LOG_TIME=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mcp-internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # MCP Memories Application
+  mcp-memories:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-memories-app
+    ports:
+      - "${PORT-3871}:${PORT-3871}"
+    env_file: .env
+    environment:
+      # Server Configuration
+      - NODE_ENV=production
+      - PORT=3871
+      - HOST=0.0.0.0
+      - SESSION_SECRET=${SESSION_SECRET}
+      
+      # CORS Configuration
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:*,https://claude.ai}
+      
+      # NATS Configuration
+      - NATS_SERVERS=nats://nats:4222
+      - NATS_STREAM_NAME=MEMORIES
+      - NATS_CONSUMER_NAME=mcp-memories-consumer
+      
+      # Authentik OAuth Configuration
+      - AUTHENTIK_URL=${AUTHENTIK_URL}
+      - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
+      - AUTHENTIK_CLIENT_SECRET=${AUTHENTIK_CLIENT_SECRET}
+      - AUTHENTIK_REDIRECT_URI=${AUTHENTIK_REDIRECT_URI}
+      - AUTHENTIK_SCOPE=openid profile email
+      
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=json
+    volumes:
+      - ${APP_LOGS:-./logs}:/app/logs
+      # - /etc/timezone:/etc/timezone:ro
+      # - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${PORT:-3871}/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mcp-app
+      - mcp-internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      traefik.enable: true
+      traefik.http.routers.mcp-memories.rule: Host(`${APP_EXTERNAL_DOMAIN}`)
+      traefik.http.routers.mcp-memories.entryPoints: https
+      traefik.http.services.mcp-memories.loadbalancer.server.port: ${PORT:-3871}
+
+  # Optional: NATS monitoring dashboard
+  nats-dashboard:
+    image: natsio/surveyor:latest
+    container_name: mcp-memories-dashboard
+    command: [
+      "--connect", "nats://nats:4222",
+      "--http-port", "7777",
+      "--jetstream"
+    ]
+    ports:
+      - "7777:7777"
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - mcp-internal
+    profiles:
+      - monitoring
+
+  # Optional: Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mcp-memories-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${PROMETHEUS_DATA:-./data/prometheus}:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - mcp-internal
+    profiles:
+      - monitoring
+
+networks:
+  mcp-app:
+    driver: bridge
+  mcp-internal:
+    internal: true

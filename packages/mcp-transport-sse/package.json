@@ -1,0 +1,56 @@
+{
+    "name": "@tylercoles/mcp-transport-sse",
+    "version": "0.1.0",
+    "description": "Server-Sent Events (SSE) transport for MCP servers",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "lint": "eslint src/**/*.ts",
+        "clean": "rimraf dist"
+    },
+    "keywords": [
+        "mcp",
+        "model-context-protocol",
+        "sse",
+        "server-sent-events",
+        "transport"
+    ],
+    "author": "Tyler Coles",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/tylercoles/mcp-framework.git",
+        "directory": "packages/mcp-transport-sse"
+    },
+    "homepage": "https://github.com/tylercoles/mcp-framework#readme",
+    "bugs": {
+        "url": "https://github.com/tylercoles/mcp-framework/issues"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.0.4",
+        "@tylercoles/mcp-server": "^0.1.0",
+        "cors": "^2.8.5",
+        "express": "^4.18.2",
+        "uuid": "^9.0.1"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.17",
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.0.0",
+        "@types/node-fetch": "^2.6.12",
+        "@types/uuid": "^9.0.7",
+        "node-fetch": "^3.3.2",
+        "ts-jest": "^29.1.1",
+        "typescript": "^5.3.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

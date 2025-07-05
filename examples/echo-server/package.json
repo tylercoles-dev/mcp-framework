@@ -1,0 +1,28 @@
+{
+    "name": "@tylercoles/example-echo-server",
+    "version": "0.1.0",
+    "description": "Simple MCP server example demonstrating basic framework features",
+    "type": "module",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "start": "node dist/index.js",
+        "start:stdio": "node dist/stdio.js",
+        "start:http": "node dist/http.js",
+        "start:oauth": "node dist/oauth.js",
+        "start:router": "node dist/router.js",
+        "start:multi": "node dist/multi-transport.js"
+    },
+    "dependencies": {
+        "@tylercoles/mcp-server": "0.1.0",
+        "@tylercoles/mcp-transport-stdio": "0.1.0",
+        "@tylercoles/mcp-transport-http": "0.1.0",
+        "@tylercoles/mcp-auth": "0.1.0",
+        "@tylercoles/mcp-auth-authentik": "0.1.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.3.0"
+    }
+}

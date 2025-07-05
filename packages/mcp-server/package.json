@@ -1,0 +1,49 @@
+{
+  "name": "@tylercoles/mcp-server",
+  "version": "0.1.0",
+  "description": "Core framework for building Model Context Protocol (MCP) servers with plugin architecture",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "framework"
+  ],
+  "author": "Tyler Coles",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylercoles/mcp-framework.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/tylercoles/mcp-framework#readme",
+  "bugs": {
+    "url": "https://github.com/tylercoles/mcp-framework/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "express": "^4.19.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

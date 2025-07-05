@@ -1,0 +1,26 @@
+{
+    "name": "@tylercoles/example-multi-transport-server",
+    "version": "0.0.0",
+    "description": "Example MCP server with multiple transports",
+    "private": true,
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "start": "node dist/index.js",
+        "start:http": "ENABLE_STDIO=false node dist/index.js",
+        "start:stdio": "ENABLE_HTTP=false node dist/index.js",
+        "start:both": "node dist/index.js",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "@tylercoles/mcp-server": "0.1.0",
+        "@tylercoles/mcp-transport-http": "0.1.0",
+        "@tylercoles/mcp-transport-stdio": "0.1.0",
+        "@tylercoles/mcp-auth": "0.1.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.3.0"
+    }
+}

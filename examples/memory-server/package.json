@@ -1,0 +1,40 @@
+{
+  "name": "@tylercoles/example-memory-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MCP server example with NATS persistence and Authentik authentication",
+  "license": "MIT",
+  "author": "Tyler Coles",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts",
+    "type-check": "tsc --noEmit",
+    "debug": "tsx --inspect src/index.ts"
+  },
+  "dependencies": {
+    "@tylercoles/mcp-auth-authentik": "0.1.0",
+    "@tylercoles/mcp-server": "0.1.0",
+    "@tylercoles/mcp-transport-http": "0.1.0",
+    "nats": "^2.20.0",
+    "uuid": "^11.1.0",
+    "winston": "^3.11.0",
+    "zod": "^3.25.74"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/passport": "^1.0.0",
+    "jest": "^30.0.4",
+    "prettier": "^3.1.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

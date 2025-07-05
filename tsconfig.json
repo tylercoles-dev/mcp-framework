@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true
+  },
+  "references": [
+    {
+      "path": "./packages/mcp-server"
+    },
+    {
+      "path": "./packages/mcp-auth"
+    },
+    {
+      "path": "./packages/mcp-transport-stdio"
+    },
+    {
+      "path": "./packages/mcp-transport-http"
+    },
+    {
+      "path": "./packages/mcp-auth-authentik"
+    },
+    {
+      "path": "./examples/multi-transport-server"
+    }
+  ],
+  "exclude": [
+    "dist/**/*.ts",
+    "tests/**/*.ts",
+    "**/*.test.ts"
+  ]
+}
