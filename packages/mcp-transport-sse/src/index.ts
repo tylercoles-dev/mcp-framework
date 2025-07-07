@@ -208,7 +208,7 @@ export class SSETransport implements Transport {
  */
 export function createSSEServer(
   server: MCPServer,
-  config?: SSEConfig
+  config?: Partial<SSEConfig>
 ): SSETransport {
   const transport = new SSETransport(config);
   server.useTransport(transport);

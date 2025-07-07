@@ -229,7 +229,7 @@ export class MCPServer {
       mimeType: config.mimeType
     });
 
-    this.sdkServer.registerResource(name, uriTemplate, config as any, handler);
+    this.sdkServer.registerResource(name, uriTemplate, config as any, handler as any);
   }
 
   /**
