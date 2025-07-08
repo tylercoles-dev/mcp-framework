@@ -1,0 +1,48 @@
+{
+  "name": "@tylercoles/mcp-client",
+  "version": "0.1.0",
+  "description": "Base interfaces and types for MCP clients",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "client",
+    "interfaces",
+    "ai",
+    "framework"
+  ],
+  "author": "Tyler Coles",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylercoles/mcp-framework.git",
+    "directory": "packages/mcp-client"
+  },
+  "homepage": "https://github.com/tylercoles/mcp-framework#readme",
+  "bugs": {
+    "url": "https://github.com/tylercoles/mcp-framework/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

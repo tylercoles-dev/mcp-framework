@@ -113,6 +113,8 @@ async function main() {
         port: PORT,
         host: HOST,
         basePath: "/",
+        enableDnsRebindingProtection: true,
+        allowedHosts: ["127.0.0.1", "localhost"],
         cors: {
           origin: true,
           credentials: true,
