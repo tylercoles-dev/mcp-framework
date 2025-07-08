@@ -37,7 +37,7 @@ export interface PromptInfo {
 /**
  * Base interface that all MCP clients must implement
  */
-export interface MCPClient {
+export interface IMCPClient {
   /**
    * Connect to the MCP server
    */
@@ -92,7 +92,7 @@ export interface MCPClient {
 /**
  * Abstract base class that provides common MCP client functionality
  */
-export abstract class BaseMCPClient implements MCPClient {
+export abstract class BaseMCPClient implements IMCPClient {
   protected connected = false;
 
   abstract connect(): Promise<void>;
@@ -136,6 +136,6 @@ export interface ClientConfig {
  * Factory interface for creating MCP clients
  */
 export interface MCPClientFactory<TConfig extends ClientConfig = ClientConfig> {
-  create(config: TConfig): MCPClient;
-  createAndConnect(config: TConfig): Promise<MCPClient>;
+  create(config: TConfig): IMCPClient;
+  createAndConnect(config: TConfig): Promise<IMCPClient>;
 }
