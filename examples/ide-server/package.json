@@ -8,11 +8,12 @@
         "build": "tsc",
         "dev": "tsc --watch",
         "start": "node dist/index.js",
+        "start:stdio": "node dist/index.js --stdio",
         "start:serena": "node dist/index.js --serena",
+        "start:serena-stdio": "node dist/index.js --serena --stdio",
         "start:serena-http": "node dist/index.js --serena --serena-http",
-        "start:http": "node dist/index.js --http",
-        "start:http-serena": "node dist/index.js --http --serena",
         "start:debug": "DEBUG=true node dist/index.js",
+        "test:serena": "uvx --from git+https://github.com/oraios/serena serena-mcp-server --help",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "bin": {

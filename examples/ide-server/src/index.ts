@@ -76,8 +76,11 @@ class IdeMCPServer {
             enabled: true,
             transport: 'stdio',
             stdio: {
-                command: process.env.SERENA_COMMAND || 'serena',
-                args: process.env.SERENA_ARGS ? process.env.SERENA_ARGS.split(' ') : ['--mcp-stdio']
+                command: process.env.SERENA_COMMAND || 'uvx',
+                args: process.env.SERENA_ARGS ? process.env.SERENA_ARGS.split(' ') : [
+                    '--from', 'git+https://github.com/oraios/serena',
+                    'serena-mcp-server'
+                ]
             }
         };
     }
@@ -106,6 +109,7 @@ class IdeMCPServer {
             }
         } catch (error) {
             console.error("Failed to connect to Serena:", error);
+            console.error("Continuing without Serena integration...");
             this.serenaClient = undefined;
         }
     }
@@ -140,23 +144,29 @@ class IdeMCPServer {
     }
 
     private setupTransport(): void {
-        // Determine transport based on CLI args
-        const useHttp = process.argv.includes('--http');
-        const port = parseInt(process.env.PORT || '3000');
-        const host = process.env.HOST || '127.0.0.1';
-
-        if (useHttp) {
-            console.error(`Starting HTTP transport on ${host}:${port}`);
+        // Check for stdio flag first (for backwards compatibility)
+        const useStdio = process.argv.includes('--stdio');
+        const useHttp = process.argv.includes('--http') || !useStdio; // Default to HTTP
+        
+        if (useStdio) {
+            console.error("Starting stdio transport");
+            this.server.useTransport(new StdioTransport({
+                logStderr: process.env.DEBUG === 'true'
+            }));
+        } else {
+            const port = parseInt(process.env.PORT || '3000');
+            const host = process.env.HOST || '127.0.0.1';
+            
+            console.error(`Starting StreamableHTTP transport on ${host}:${port}`);
             this.server.useTransport(new HttpTransport({
                 port,
                 host,
                 enableDnsRebindingProtection: true,
-                allowedHosts: [host, 'localhost', '127.0.0.1']
-            }));
-        } else {
-            console.error("Starting stdio transport");
-            this.server.useTransport(new StdioTransport({
-                logStderr: process.env.DEBUG === 'true'
+                allowedHosts: [host, 'localhost', '127.0.0.1'],
+                cors: {
+                    origin: true,
+                    credentials: true
+                }
             }));
         }
     }
@@ -242,7 +252,8 @@ class IdeMCPServer {
                     return {
                         content: [{
                             type: "text" as const,
-                            text: `Serena integration is enabled but not connected. Transport: ${this.config.transport}`
+                            text: `Serena integration is enabled but not connected. Transport: ${this.config.transport}\n` +
+                                  `This usually means Serena failed to start (check console for errors).`
                         }]
                     };
                 }
@@ -268,6 +279,29 @@ class IdeMCPServer {
                         }]
                     };
                 }
+            }
+        );
+
+        // Health check tool
+        this.server.registerTool(
+            "health_check",
+            {
+                title: "Health Check",
+                description: "Check server health and status",
+                inputSchema: {}
+            },
+            async () => {
+                const capabilities = this.server.getCapabilities();
+                return {
+                    content: [{
+                        type: "text" as const,
+                        text: `IDE MCP Server is healthy\n` +
+                              `Tools: ${capabilities.tools.length}\n` +
+                              `Resources: ${capabilities.resources.length}\n` +
+                              `Prompts: ${capabilities.prompts.length}\n` +
+                              `Serena: ${this.serenaClient ? 'Connected' : 'Not connected'}`
+                    }]
+                };
             }
         );
     }
@@ -438,23 +472,169 @@ class IdeMCPServer {
     }
 
     private async setupWorkspace(args: any) {
-        // Implementation would setup VS Code, prettier, etc.
-        return {
-            content: [{
-                type: "text" as const,
-                text: `Workspace setup completed for ${args.projectPath}`
-            }]
-        };
+        try {
+            const { projectPath, includeVSCode, includeGitignore, includeEditorConfig, includePrettier } = args;
+            const actions: string[] = [];
+
+            if (includeVSCode) {
+                const vscodeDir = path.join(projectPath, '.vscode');
+                await fs.mkdir(vscodeDir, { recursive: true });
+                
+                const settings = {
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.fixAll": true
+                    }
+                };
+                
+                await fs.writeFile(
+                    path.join(vscodeDir, 'settings.json'),
+                    JSON.stringify(settings, null, 2)
+                );
+                actions.push('VS Code settings');
+            }
+
+            if (includeGitignore) {
+                const gitignore = `# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Production
+/build
+/dist
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+`;
+                await fs.writeFile(path.join(projectPath, '.gitignore'), gitignore);
+                actions.push('.gitignore');
+            }
+
+            if (includeEditorConfig) {
+                const editorconfig = `root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+`;
+                await fs.writeFile(path.join(projectPath, '.editorconfig'), editorconfig);
+                actions.push('.editorconfig');
+            }
+
+            if (includePrettier) {
+                const prettierrc = {
+                    "semi": true,
+                    "trailingComma": "es5",
+                    "singleQuote": false,
+                    "printWidth": 80,
+                    "tabWidth": 2
+                };
+                
+                await fs.writeFile(
+                    path.join(projectPath, '.prettierrc'),
+                    JSON.stringify(prettierrc, null, 2)
+                );
+                actions.push('Prettier config');
+            }
+
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `Workspace setup completed for ${projectPath}\nConfigured: ${actions.join(', ')}`
+                }]
+            };
+        } catch (error) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `Failed to setup workspace: ${error instanceof Error ? error.message : 'Unknown error'}`
+                }],
+                isError: true
+            };
+        }
     }
 
     private async manageDependencies(args: any) {
-        // Implementation would handle npm/pip/cargo operations
-        return {
-            content: [{
-                type: "text" as const,
-                text: `Dependencies managed for ${args.projectPath}`
-            }]
-        };
+        try {
+            const { projectPath, type, dependencies, devDependencies, remove } = args;
+            const actions: string[] = [];
+
+            if (type === 'npm') {
+                if (dependencies && dependencies.length > 0) {
+                    await this.execCommand('npm', ['install', ...dependencies], { cwd: projectPath });
+                    actions.push(`Added dependencies: ${dependencies.join(', ')}`);
+                }
+
+                if (devDependencies && devDependencies.length > 0) {
+                    await this.execCommand('npm', ['install', '--save-dev', ...devDependencies], { cwd: projectPath });
+                    actions.push(`Added dev dependencies: ${devDependencies.join(', ')}`);
+                }
+
+                if (remove && remove.length > 0) {
+                    await this.execCommand('npm', ['uninstall', ...remove], { cwd: projectPath });
+                    actions.push(`Removed: ${remove.join(', ')}`);
+                }
+            } else if (type === 'pip') {
+                if (dependencies && dependencies.length > 0) {
+                    await this.execCommand('pip', ['install', ...dependencies], { cwd: projectPath });
+                    actions.push(`Installed: ${dependencies.join(', ')}`);
+                }
+
+                if (remove && remove.length > 0) {
+                    await this.execCommand('pip', ['uninstall', '-y', ...remove], { cwd: projectPath });
+                    actions.push(`Removed: ${remove.join(', ')}`);
+                }
+            } else if (type === 'cargo') {
+                if (dependencies && dependencies.length > 0) {
+                    await this.execCommand('cargo', ['add', ...dependencies], { cwd: projectPath });
+                    actions.push(`Added: ${dependencies.join(', ')}`);
+                }
+
+                if (remove && remove.length > 0) {
+                    await this.execCommand('cargo', ['remove', ...remove], { cwd: projectPath });
+                    actions.push(`Removed: ${remove.join(', ')}`);
+                }
+            }
+
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `Dependency management completed for ${projectPath}\n${actions.join('\n')}`
+                }]
+            };
+        } catch (error) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `Failed to manage dependencies: ${error instanceof Error ? error.message : 'Unknown error'}`
+                }],
+                isError: true
+            };
+        }
     }
 
     private async gitCommit(args: any) {
