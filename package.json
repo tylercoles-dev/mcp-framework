@@ -33,7 +33,7 @@
     "dev": "npm run dev --workspaces --if-present",
     "typecheck": "tsc --noEmit",
     "verify": "node tools/verify-workspaces.js",
-    "publish:packages": "npx ts-node tools/publish-packages.ts",
+    "publish:packages": "npx ts-node tools/publish-packages",
     "prepare": "npm run build",
     "ws": "npm --workspaces",
     "ws:info": "npm ls --depth=0",

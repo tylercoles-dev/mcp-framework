@@ -17,6 +17,7 @@ module.exports = {
     }
   },
   moduleNameMapper: {
+    '^@tylercoles/mcp-server$': '<rootDir>/../mcp-server/src',
     '^@tylercoles/mcp-auth$': '<rootDir>/../mcp-auth/src'
   }
 };

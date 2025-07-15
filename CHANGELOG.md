@@ -149,6 +149,127 @@ Added unit tests for all framework packages with >80% coverage targets:
 
 This testing suite ensures the framework is reliable, maintainable, and ready for production use.
 
+## 2025-01-16
+
+### Authentik Dynamic Client Registration Implementation
+
+Implemented real dynamic client registration for the Authentik OAuth provider, replacing the TODO placeholder with a full API implementation.
+
+#### Core Implementation
+
+1. **Complete `registerClient()` Method**
+   - Uses Authentik REST API to create OAuth2 providers via `/api/v3/providers/oauth2/`
+   - Creates applications via `/api/v3/core/applications/`
+   - Returns proper `ClientRegistrationResponse` with client credentials
+   - Maintains Claude.ai special case for compatibility
+   - Detailed error handling for different API failure modes
+
+2. **Client Lifecycle Management**
+   - Added `revokeRegistration()` method for cleanup
+   - Finds and deletes associated applications and providers
+   - Proper error handling for missing clients
+   - Logs cleanup operations for debugging
+
+3. **API Token Validation**
+   - Added `validateRegistrationToken()` method
+   - Tests API token permissions with simple provider list call
+   - Returns boolean for easy integration checking
+   - Proper error handling and logging
+
+#### Configuration Updates
+
+- Updated `AuthentikConfig.registrationApiToken` documentation
+- Clarified it's required for non-Claude clients
+- Enhanced `supportsDynamicRegistration()` method
+
+#### Comprehensive Testing
+
+- Added extensive test suite for dynamic registration functionality
+- Tests cover successful registration, error scenarios, token validation, and revocation
+- Mock Authentik API responses with proper error codes
+- All existing tests continue to pass
+- Proper async/await testing patterns
+
+#### API Requirements
+
+The implementation requires an Authentik API token with permissions for:
+- `authentik Providers:Create/Read/Delete` - OAuth2 provider management
+- `authentik Core:Create/Read/Delete` - Application management
+
+#### Error Handling
+
+Provides detailed error messages for:
+- Missing API token (403)
+- Invalid/insufficient permissions (401/403)
+- Bad request data (400)
+- Network/server errors
+- Client not found scenarios
+
+This completes the dynamic client registration functionality, making the Authentik provider fully MCP-compliant for real OAuth flows beyond the Claude.ai special case.
+
+## 2025-01-15
+
+### Comprehensive Documentation - README Files for All Packages
+
+Added comprehensive README files for all MCP Framework packages that were missing documentation:
+
+#### New README Files Added
+
+1. **@tylercoles/mcp-auth** - Authentication abstractions and providers
+   - Covers all auth provider types (DevAuth, NoAuth, BearerTokenAuth, SessionAuth, OAuthProvider)
+   - MCP authorization compliance details (RFC 9728, RFC 8414)
+   - Express middleware integration examples
+   - Security best practices and considerations
+   - TypeScript usage examples
+
+2. **@tylercoles/mcp-auth-authentik** - Authentik OAuth2/OIDC provider
+   - Complete Authentik integration guide
+   - OAuth2 flow examples with mermaid sequence diagrams
+   - Group-based access control configuration
+   - Dynamic client registration for Claude.ai compliance
+   - Session and token management examples
+   - Troubleshooting guide
+
+3. **@tylercoles/mcp-transport-http** - HTTP transport with SSE
+   - MCP Streamable HTTP protocol implementation (2025-06-18)
+   - Session management and security features
+   - Express.js integration and custom routing
+   - Authentication middleware integration
+   - CORS, Helmet, and DNS rebinding protection
+   - Performance optimization tips
+
+4. **@tylercoles/mcp-transport-stdio** - Standard I/O transport
+   - Command-line tool development patterns
+   - Process spawning and subprocess integration
+   - Claude Desktop integration examples
+   - VS Code extension development guide
+   - Shell script integration patterns
+   - Testing strategies for stdio communication
+
+#### Documentation Features
+
+- **Real-World Examples**: Comprehensive usage patterns and integration examples
+- **Security Sections**: Detailed security considerations and best practices
+- **Integration Guides**: How to combine packages effectively
+- **Troubleshooting**: Common issues, debugging tips, and solutions
+- **Performance Tips**: Optimization recommendations and monitoring
+- **TypeScript Support**: Full type information and examples
+- **Protocol Compliance**: MCP specification alignment details
+
+#### Complete Package Documentation Status
+
+- ✅ **@tylercoles/mcp-server** - Core framework (existing)
+- ✅ **@tylercoles/mcp-auth** - Authentication abstractions (new)
+- ✅ **@tylercoles/mcp-auth-authentik** - Authentik provider (new)
+- ✅ **@tylercoles/mcp-transport-stdio** - stdio transport (new)
+- ✅ **@tylercoles/mcp-transport-http** - HTTP transport (new)
+- ✅ **@tylercoles/mcp-transport-sse** - SSE transport (existing)
+- ✅ **@tylercoles/mcp-client** - Client implementations (existing)
+- ✅ **@tylercoles/mcp-client-http** - HTTP client (existing)
+- ✅ **@tylercoles/mcp-client-stdio** - stdio client (existing)
+
+All packages now have complete, professional-grade documentation to help developers understand, implement, and extend the MCP Framework effectively. Each README includes installation instructions, quick start examples, configuration options, advanced usage patterns, and comprehensive API documentation.
+
 ## 2024-01-10
 
 ### Memory Server Introspection Integration

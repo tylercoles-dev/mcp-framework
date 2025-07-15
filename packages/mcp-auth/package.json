@@ -1,6 +1,6 @@
 {
   "name": "@tylercoles/mcp-auth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Authentication abstractions and providers for MCP servers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
