@@ -19,6 +19,8 @@ import {
 export interface AuthentikConfig {
   url: string;
   clientId: string;
+  authorizationFlowId: string;
+  invalidationFlowId: string;
   clientSecret?: string;
   scopes?: string[];
   redirectUri?: string;
@@ -26,6 +28,8 @@ export interface AuthentikConfig {
   allowedGroups?: string[]; // Optional: restrict access to specific groups
   sessionSecret?: string; // For passport session management
   registrationApiToken?: string; // API token for dynamic client registration (required for non-Claude clients)
+  authenticationFlowId?: string;
+  signingKeyId?: string;
 }
 
 /**
@@ -400,25 +404,7 @@ export class AuthentikAuth extends OAuthProvider {
    * Handle dynamic client registration
    */
   async registerClient(request: ClientRegistrationRequest): Promise<ClientRegistrationResponse> {
-    // Special handling for Claude.ai
-    if (request.client_name === 'claudeai') {
-      console.log('Returning pre-configured client for Claude.ai');
-      return {
-        client_id: this.config.clientId,
-        client_secret: '',
-        registration_access_token: 'not-used',
-        registration_client_uri: `${request.redirect_uris[0]}/register/${this.config.clientId}`,
-        client_id_issued_at: Math.floor(Date.now() / 1000),
-        client_secret_expires_at: 0,
-        redirect_uris: request.redirect_uris,
-        token_endpoint_auth_method: 'client_secret_post',
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
-        scope: 'openid profile email'
-      };
-    }
-
-    // Real dynamic registration using Authentik API
+    // Dynamic registration using Authentik API
     if (!this.config.registrationApiToken) {
       throw new Error('Dynamic registration requires API token configuration');
     }
@@ -434,11 +420,13 @@ export class AuthentikAuth extends OAuthProvider {
         `${this.config.url}/api/v3/providers/oauth2/`,
         {
           name: providerName,
+          authentication_flow: this.config.authenticationFlowId,
+          invalidation_flow: this.config.invalidationFlowId,
+          authorization_flow: this.config.authorizationFlowId,
           client_type: 'confidential',
           client_id: `mcp-${timestamp}`,
-          authorization_flow: 'default-authorization-flow',
           redirect_uris: request.redirect_uris.join('\n'),
-          signing_key: 'default-key', // Use default signing key
+          signing_key: this.config.signingKeyId,
           access_code_validity: 'minutes=10',
           access_token_validity: 'minutes=5',
           refresh_token_validity: 'days=30',
@@ -462,7 +450,7 @@ export class AuthentikAuth extends OAuthProvider {
         `${this.config.url}/api/v3/core/applications/`,
         {
           name: appName,
-          slug: `mcp-${request.client_name}-${timestamp}`,
+          slug: `mcp-${request.client_name.replaceAll(' ', '_')}-${timestamp}`,
           provider: provider.pk,
           meta_launch_url: request.redirect_uris[0] || '',
           meta_description: `MCP application for ${request.client_name}`,

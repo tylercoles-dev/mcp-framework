@@ -1,4 +1,4 @@
-import { Request, Response, Router } from 'express';
+import express, { Request, Response, Router } from 'express';
 
 /**
  * User interface representing an authenticated user
@@ -326,5 +326,4 @@ function getBaseUrl(req: Request): string {
 }
 
 // Re-export express for convenience
-import express from 'express';
 export { express };
