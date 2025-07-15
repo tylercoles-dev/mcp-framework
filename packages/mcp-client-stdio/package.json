@@ -29,12 +29,12 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/tylercoles/mcp-framework.git",
+        "url": "https://github.com/tylercoles-dev/mcp-framework",
         "directory": "packages/mcp-client-stdio"
     },
-    "homepage": "https://github.com/tylercoles/mcp-framework#readme",
+    "homepage": "https://github.com/tylercoles-dev/mcp-framework#readme",
     "bugs": {
-        "url": "https://github.com/tylercoles/mcp-framework/issues"
+        "url": "https://github.com/tylercoles-dev/mcp-framework/issues"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.15.1",

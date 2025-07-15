@@ -42,7 +42,7 @@ git clone https://github.com/YOUR_USERNAME/mcp-framework.git
 cd mcp-framework
 
 # Add upstream remote
-git remote add upstream https://github.com/tylercoles/mcp-framework.git
+git remote add upstream https://github.com/tylercoles-dev/mcp-framework
 
 # Install dependencies
 npm install

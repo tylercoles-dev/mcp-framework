@@ -5,7 +5,7 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/tylercoles-dev/mcp-framework.git"
+    "url": "https://github.com/tylercoles-dev/mcp-framework"
   },
   "keywords": [
     "mcp",
@@ -24,7 +24,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "build:order": "node tools/build-workspaces.js",
-    "test": "vitest",
+    "test": "vitest run",
     "test:all": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
@@ -34,7 +34,7 @@
     "dev": "npm run dev --workspaces --if-present",
     "typecheck": "tsc --noEmit",
     "verify": "node tools/verify-workspaces.js",
-    "publish:packages": "npx ts-node tools/publish-packages",
+    "publish:packages": "npx ts-node --project tools/tsconfig.json tools/publish-packages.ts",
     "prepare": "npm run build",
     "ws": "npm --workspaces",
     "ws:info": "npm ls --depth=0",
