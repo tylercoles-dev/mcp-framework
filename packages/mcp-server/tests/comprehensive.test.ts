@@ -1,23 +1,24 @@
 import { MCPServer, z } from '../src';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Transport, ToolContext, ToolHandler, ResourceHandler, PromptHandler } from '../src';
 
 // Mock the SDK server
 const mockSDKServer = {
-  registerTool: jest.fn(),
-  registerResource: jest.fn(),
-  registerPrompt: jest.fn(),
-  connect: jest.fn()
+  registerTool: vi.fn(),
+  registerResource: vi.fn(),
+  registerPrompt: vi.fn(),
+  connect: vi.fn()
 };
 
-jest.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
-  McpServer: jest.fn().mockImplementation(() => mockSDKServer)
+vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
+  McpServer: vi.fn(() => mockSDKServer)
 }));
 
 describe('MCPServer - Comprehensive Tests', () => {
   let server: MCPServer;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     server = new MCPServer({
       name: 'test-server',
       version: '1.0.0',
@@ -34,8 +35,8 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should start with configured transport', async () => {
       const mockTransport: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       server.useTransport(mockTransport);
@@ -47,13 +48,13 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should start with multiple transports', async () => {
       const transport1: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       const transport2: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       server.useTransports(transport1, transport2);
@@ -70,8 +71,8 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should throw if already started', async () => {
       const mockTransport: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       server.useTransport(mockTransport);
@@ -82,13 +83,13 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should stop all transports', async () => {
       const transport1: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       const transport2: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       server.useTransports(transport1, transport2);
@@ -106,8 +107,8 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should throw when adding transport after start', async () => {
       const mockTransport: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       server.useTransport(mockTransport);
@@ -121,7 +122,7 @@ describe('MCPServer - Comprehensive Tests', () => {
 
   describe('Tool Registration and Management', () => {
     it('should register tool with all metadata', () => {
-      const handler = jest.fn().mockResolvedValue({
+      const handler = vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'result' }]
       });
 
@@ -157,7 +158,7 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should inject context into tool handler', async () => {
       let capturedContext: ToolContext | undefined;
-      const handler = jest.fn().mockImplementation((args, context) => {
+      const handler = vi.fn((args, context) => {
         capturedContext = context;
         return { content: [{ type: 'text', text: 'result' }] };
       });
@@ -176,7 +177,7 @@ describe('MCPServer - Comprehensive Tests', () => {
     });
 
     it('should handle tool errors gracefully', async () => {
-      const handler = jest.fn().mockRejectedValue(new Error('Tool error'));
+      const handler = vi.fn().mockRejectedValue(new Error('Tool error'));
 
       server.registerTool('test_tool', { description: 'Test', inputSchema: {} }, handler);
 
@@ -185,8 +186,8 @@ describe('MCPServer - Comprehensive Tests', () => {
     });
 
     it('should get specific tool by name', () => {
-      server.registerTool('tool1', { description: 'Tool 1', inputSchema: {} }, jest.fn());
-      server.registerTool('tool2', { description: 'Tool 2', inputSchema: {} }, jest.fn());
+      server.registerTool('tool1', { description: 'Tool 1', inputSchema: {} }, vi.fn());
+      server.registerTool('tool2', { description: 'Tool 2', inputSchema: {} }, vi.fn());
 
       const tool = server.getTool('tool1');
       expect(tool).toBeDefined();
@@ -199,7 +200,7 @@ describe('MCPServer - Comprehensive Tests', () => {
 
   describe('Resource Registration and Management', () => {
     it('should register resource with string URI', () => {
-      const handler: ResourceHandler = jest.fn().mockResolvedValue({
+      const handler: ResourceHandler = vi.fn().mockResolvedValue({
         contents: [{ uri: 'test://resource', text: 'content' }]
       });
 
@@ -239,7 +240,7 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should register resource with template URI', () => {
       const template = { uriTemplate: 'test://{id}' };
-      const handler: ResourceHandler = jest.fn();
+      const handler: ResourceHandler = vi.fn();
 
       server.registerResource(
         'template_resource',
@@ -253,8 +254,8 @@ describe('MCPServer - Comprehensive Tests', () => {
     });
 
     it('should get specific resource by name', () => {
-      server.registerResource('res1', 'uri1', { description: 'Resource 1' }, jest.fn());
-      server.registerResource('res2', 'uri2', { description: 'Resource 2' }, jest.fn());
+      server.registerResource('res1', 'uri1', { description: 'Resource 1' }, vi.fn());
+      server.registerResource('res2', 'uri2', { description: 'Resource 2' }, vi.fn());
 
       const resource = server.getResource('res1');
       expect(resource).toBeDefined();
@@ -267,7 +268,7 @@ describe('MCPServer - Comprehensive Tests', () => {
 
   describe('Prompt Registration and Management', () => {
     it('should register prompt with all metadata', () => {
-      const handler: PromptHandler = jest.fn().mockReturnValue({
+      const handler: PromptHandler = vi.fn().mockReturnValue({
         messages: [{ role: 'user', content: { type: 'text', text: 'prompt' } }]
       });
 
@@ -314,8 +315,8 @@ describe('MCPServer - Comprehensive Tests', () => {
     });
 
     it('should get specific prompt by name', () => {
-      server.registerPrompt('prompt1', { description: 'Prompt 1' }, jest.fn());
-      server.registerPrompt('prompt2', { description: 'Prompt 2' }, jest.fn());
+      server.registerPrompt('prompt1', { description: 'Prompt 1' }, vi.fn());
+      server.registerPrompt('prompt2', { description: 'Prompt 2' }, vi.fn());
 
       const prompt = server.getPrompt('prompt1');
       expect(prompt).toBeDefined();
@@ -359,13 +360,13 @@ describe('MCPServer - Comprehensive Tests', () => {
   describe('Capabilities and Introspection', () => {
     beforeEach(() => {
       // Register various items
-      server.registerTool('tool1', { description: 'Tool 1', inputSchema: {} }, jest.fn());
-      server.registerTool('tool2', { title: 'Tool Two', description: 'Tool 2', inputSchema: {} }, jest.fn());
+      server.registerTool('tool1', { description: 'Tool 1', inputSchema: {} }, vi.fn());
+      server.registerTool('tool2', { title: 'Tool Two', description: 'Tool 2', inputSchema: {} }, vi.fn());
       
-      server.registerResource('res1', 'uri1', { title: 'Resource One' }, jest.fn());
+      server.registerResource('res1', 'uri1', { title: 'Resource One' }, vi.fn());
       
-      server.registerPrompt('prompt1', { description: 'Prompt 1' }, jest.fn());
-      server.registerPrompt('prompt2', { title: 'Prompt Two', description: 'Prompt 2' }, jest.fn());
+      server.registerPrompt('prompt1', { description: 'Prompt 1' }, vi.fn());
+      server.registerPrompt('prompt2', { title: 'Prompt Two', description: 'Prompt 2' }, vi.fn());
     });
 
     it('should return all capabilities', () => {
@@ -395,8 +396,8 @@ describe('MCPServer - Comprehensive Tests', () => {
   describe('Error Handling', () => {
     it('should handle transport start errors', async () => {
       const failingTransport: Transport = {
-        start: jest.fn().mockRejectedValue(new Error('Transport start failed')),
-        stop: jest.fn()
+        start: vi.fn().mockRejectedValue(new Error('Transport start failed')),
+        stop: vi.fn()
       };
 
       server.useTransport(failingTransport);
@@ -406,8 +407,8 @@ describe('MCPServer - Comprehensive Tests', () => {
 
     it('should handle transport stop errors gracefully', async () => {
       const transport: Transport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockRejectedValue(new Error('Stop failed'))
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockRejectedValue(new Error('Stop failed'))
       };
 
       server.useTransport(transport);

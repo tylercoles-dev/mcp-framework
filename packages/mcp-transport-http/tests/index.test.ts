@@ -1,6 +1,8 @@
+import { describe, it, expect } from 'vitest';
+import { HttpTransport } from '../src/index';
+
 describe('module exports', () => {
   it('should export HttpTransport', () => {
-    const { HttpTransport } = require('../src/index');
     expect(HttpTransport).toBeDefined();
   });
 });

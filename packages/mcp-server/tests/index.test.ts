@@ -1,12 +1,13 @@
 import { MCPServer, z } from '../src';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Transport, ToolContext, ToolHandler } from '../src';
 
 // Mock the SDK server
-jest.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
-  McpServer: jest.fn().mockImplementation(() => ({
-    registerTool: jest.fn(),
-    registerResource: jest.fn(),
-    registerPrompt: jest.fn()
+vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
+  McpServer: vi.fn(() => ({
+    registerTool: vi.fn(),
+    registerResource: vi.fn(),
+    registerPrompt: vi.fn()
   }))
 }));
 
@@ -29,7 +30,7 @@ describe('MCPServer', () => {
 
   describe('registerTool', () => {
     it('should register a tool', () => {
-      const handler = jest.fn().mockResolvedValue({
+      const handler = vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'test' }]
       });
 
@@ -74,8 +75,8 @@ describe('MCPServer', () => {
 
     it('should not allow transport change after start', async () => {
       const mockTransport = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined)
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined)
       };
 
       server.useTransport(mockTransport);

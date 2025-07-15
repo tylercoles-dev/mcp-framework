@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HttpTransport } from '../src/index';
 import { MCPServer } from '@tylercoles/mcp-server';
 import { AuthProvider, User } from '@tylercoles/mcp-auth';
@@ -9,8 +10,8 @@ import { z } from 'zod';
 const mockTransports: any[] = [];
 
 // Mock dependencies
-jest.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: jest.fn().mockImplementation((config) => {
+vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
+  StreamableHTTPServerTransport: vi.fn((config) => {
     const transport = {
       _sessionId: null as string | null,
       get sessionId() {
@@ -21,7 +22,7 @@ jest.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
       },
       onclose: null,
       onsessioninitialized: null,
-      handleRequest: jest.fn().mockImplementation(async (req, res, body) => {
+      handleRequest: vi.fn(async (req, res, body) => {
         // Handle initialize request
         if (body?.method === 'initialize') {
           // Generate session ID
@@ -54,7 +55,7 @@ jest.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
           res.status(202).send();
         }
       }),
-      close: jest.fn()
+      close: vi.fn()
     };
     
     // Store onclose callback from config
@@ -72,8 +73,8 @@ jest.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
 // Helper to create mock auth provider
 const createMockAuthProvider = (authenticateResult: User | null = null): AuthProvider => {
   const provider = {
-    authenticate: jest.fn().mockResolvedValue(authenticateResult),
-    getUser: jest.fn().mockReturnValue(authenticateResult)
+    authenticate: vi.fn().mockResolvedValue(authenticateResult),
+    getUser: vi.fn().mockReturnValue(authenticateResult)
   };
   return provider as unknown as AuthProvider;
 };
@@ -88,8 +89,8 @@ describe('HttpTransport', () => {
     mockTransports.length = 0;
     // Create mock MCP server
     server = {
-      getSDKServer: jest.fn().mockReturnValue({
-        connect: jest.fn().mockResolvedValue(undefined)
+      getSDKServer: vi.fn().mockReturnValue({
+        connect: vi.fn().mockResolvedValue(undefined)
       })
     } as any;
   });

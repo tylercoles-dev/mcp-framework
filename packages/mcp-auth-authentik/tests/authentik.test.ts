@@ -3,60 +3,68 @@ import { ClientRegistrationRequest } from '@tylercoles/mcp-auth';
 import express, { Request, Response, Router } from 'express';
 import request from 'supertest';
 import nock from 'nock';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock passport to avoid actual OAuth flow
-jest.mock('passport', () => ({
-  use: jest.fn(),
-  initialize: jest.fn(() => (req: any, res: any, next: any) => next()),
-  session: jest.fn(() => (req: any, res: any, next: any) => next()),
-  authenticate: jest.fn((strategy: string, options?: any) => {
-    return (req: Request, res: Response, next: any) => {
-      // Mock successful authentication
-      if (req.path === '/auth/callback' && req.query.code) {
-        req.user = {
-          id: 'user-123',
-          username: 'testuser',
-          email: 'test@example.com',
-          groups: ['users', 'staff']
-        };
-        next();
-      } else if (req.path === '/auth/login') {
-        res.redirect('/auth/callback?code=test-code&state=test-state');
-      } else {
-        res.status(401).json({ error: 'Unauthorized' });
-      }
-    };
-  }),
-  serializeUser: jest.fn((cb: any) => {
-    const user = {
-      id: 'user-123',
-      username: 'testuser',
-      email: 'test@example.com',
-      groups: ['users', 'staff']
-    };
-    cb(user, (err: any, id: string) => id);
-  }),
-  deserializeUser: jest.fn((cb: any) => {
-    const user = {
-      id: 'user-123',
-      username: 'testuser',
-      email: 'test@example.com',
-      groups: ['users', 'staff']
-    };
-    cb('user-123', (err: any, user: any) => user);
-  })
-}));
+vi.mock('passport', () => {
+  const passport = {
+    use: vi.fn(),
+    initialize: vi.fn(() => (req: any, res: any, next: any) => next()),
+    session: vi.fn(() => (req: any, res: any, next: any) => next()),
+    authenticate: vi.fn((strategy: string, options?: any) => {
+      return (req: Request, res: Response, next: any) => {
+        // Mock successful authentication
+        if (req.path === '/auth/callback' && req.query.code) {
+          req.user = {
+            id: 'user-123',
+            username: 'testuser',
+            email: 'test@example.com',
+            groups: ['users', 'staff']
+          };
+          next();
+        } else if (req.path === '/auth/login') {
+          res.redirect('/auth/callback?code=test-code&state=test-state');
+        } else {
+          res.status(401).json({ error: 'Unauthorized' });
+        }
+      };
+    }),
+    serializeUser: vi.fn((cb: any) => {
+      const user = {
+        id: 'user-123',
+        username: 'testuser',
+        email: 'test@example.com',
+        groups: ['users', 'staff']
+      };
+      cb(user, (err: any, id: string) => id);
+    }),
+    deserializeUser: vi.fn((cb: any) => {
+      const user = {
+        id: 'user-123',
+        username: 'testuser',
+        email: 'test@example.com',
+        groups: ['users', 'staff']
+      };
+      cb('user-123', (err: any, user: any) => user);
+    })
+  };
+  
+  return {
+    default: passport,
+    ...passport
+  };
+});
 
-jest.mock('express-session', () => {
-  return jest.fn(() => (req: any, res: any, next: any) => {
+vi.mock('express-session', () => ({
+  default: vi.fn(() => (req: any, res: any, next: any) => {
     req.session = {
-      regenerate: jest.fn((cb: any) => cb()),
-      destroy: jest.fn((cb: any) => cb()),
-      save: jest.fn((cb: any) => cb())
+      regenerate: vi.fn((cb: any) => cb()),
+      destroy: vi.fn((cb: any) => cb()),
+      save: vi.fn((cb: any) => cb())
     };
     next();
-  });
-});
+  })
+}));
 
 describe('AuthentikAuth', () => {
   let auth: AuthentikAuth;
@@ -104,7 +112,7 @@ describe('AuthentikAuth', () => {
 
   afterEach(() => {
     nock.cleanAll();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Route Setup', () => {

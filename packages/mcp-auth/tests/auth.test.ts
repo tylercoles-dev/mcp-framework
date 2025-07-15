@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   AuthProvider,
   NoAuth,
@@ -17,7 +18,7 @@ describe('Auth Providers', () => {
       headers: {},
       session: {},
       user: undefined,
-      isAuthenticated: jest.fn(() => false)
+      isAuthenticated: vi.fn(() => false)
     } as any;
   });
 
@@ -139,7 +140,7 @@ describe('Auth Providers', () => {
       mockRequest.headers.authorization = 'Bearer test-token-123';
       // The token extraction happens internally in authenticate
       // We verify it by checking that verifyToken is called with the correct token
-      const mockVerifyToken = jest.spyOn(provider as any, 'verifyToken');
+      const mockVerifyToken = vi.spyOn(provider as any, 'verifyToken');
       await provider.authenticate(mockRequest);
       expect(mockVerifyToken).toHaveBeenCalledWith('test-token-123');
     });

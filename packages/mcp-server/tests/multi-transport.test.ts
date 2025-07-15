@@ -1,4 +1,5 @@
 import { MCPServer, z } from '../src';
+import { describe, it, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 describe('Multi-Transport Support', () => {
   let server: MCPServer;
@@ -18,13 +19,13 @@ describe('Multi-Transport Support', () => {
 
   test('should support multiple transports', () => {
     const mockTransport1 = {
-      start: jest.fn().mockResolvedValue(undefined),
-      stop: jest.fn().mockResolvedValue(undefined)
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined)
     };
 
     const mockTransport2 = {
-      start: jest.fn().mockResolvedValue(undefined),
-      stop: jest.fn().mockResolvedValue(undefined)
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined)
     };
 
     // Should be able to add multiple transports
@@ -35,8 +36,8 @@ describe('Multi-Transport Support', () => {
 
     // Or use the bulk method
     const mockTransport3 = {
-      start: jest.fn().mockResolvedValue(undefined),
-      stop: jest.fn().mockResolvedValue(undefined)
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined)
     };
 
     expect(() => {

@@ -1,5 +1,36 @@
 # Changelog
 
+## 2025-07-15
+
+### Migrated from Jest to Vitest
+
+Completed the migration from Jest to Vitest for all packages to improve performance and development experience.
+
+#### Changes
+
+1. **Updated All Packages**
+   - Replaced Jest with Vitest in all package.json files
+   - Added vitest.config.ts files to all packages
+   - Updated test scripts to use vitest commands
+   - Added support for Vitest UI with `test:ui` scripts
+
+2. **Updated Packages**
+   - `@tylercoles/mcp-auth-authentik` - Converted Jest mocks to Vitest mocks using `vi.mock()`
+   - `@tylercoles/mcp-client` - Added Vitest configuration
+   - `@tylercoles/mcp-client-http` - Added Vitest configuration
+   - `@tylercoles/mcp-client-stdio` - Added Vitest configuration
+
+3. **Root Configuration**
+   - Updated root package.json devDependencies
+   - Removed jest, ts-jest, @types/jest
+   - Added vitest, @vitest/ui
+
+#### Benefits
+- Faster test execution
+- Better ES modules support
+- Enhanced developer experience with Vitest UI
+- More modern testing framework
+
 ## 2025-07-05
 
 ### Added SSE Transport Package

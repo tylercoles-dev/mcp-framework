@@ -1,15 +1,16 @@
 import { StdioTransport } from '../src';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { MCPServer } from '@tylercoles/mcp-server';
 import { Readable, Writable } from 'stream';
 
 // Mock the SDK's stdio transport
 const mockSDKTransport = {
   onclose: null,
-  close: jest.fn()
+  close: vi.fn()
 };
 
-jest.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: jest.fn().mockImplementation(() => mockSDKTransport)
+vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
+  StdioServerTransport: vi.fn(() => mockSDKTransport)
 }));
 
 describe('StdioTransport', () => {
@@ -20,12 +21,12 @@ describe('StdioTransport', () => {
   let mockStderr: Writable;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Create mock streams
     mockStdin = new Readable({ read() {} });
-    mockStdout = new Writable({ write: jest.fn() });
-    mockStderr = new Writable({ write: jest.fn() });
+    mockStdout = new Writable({ write: vi.fn() });
+    mockStderr = new Writable({ write: vi.fn() });
 
     // Mock process streams
     Object.defineProperty(process, 'stdin', { value: mockStdin, writable: true });
@@ -34,8 +35,8 @@ describe('StdioTransport', () => {
 
     // Create test server
     server = {
-      getSDKServer: jest.fn().mockReturnValue({
-        connect: jest.fn().mockResolvedValue(undefined)
+      getSDKServer: vi.fn().mockReturnValue({
+        connect: vi.fn().mockResolvedValue(undefined)
       })
     } as any;
   });
@@ -70,7 +71,7 @@ describe('StdioTransport', () => {
     });
 
     it('should log to stderr when enabled', async () => {
-      const consoleError = jest.spyOn(console, 'error').mockImplementation();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation();
       transport = new StdioTransport({ logStderr: true });
       
       await transport.start(server);
@@ -80,7 +81,7 @@ describe('StdioTransport', () => {
     });
 
     it('should not log when logging disabled', async () => {
-      const consoleError = jest.spyOn(console, 'error').mockImplementation();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation();
       transport = new StdioTransport({ logStderr: false });
       
       await transport.start(server);
@@ -148,7 +149,7 @@ describe('StdioTransport', () => {
     let consoleError: jest.SpyInstance;
 
     beforeEach(() => {
-      consoleError = jest.spyOn(console, 'error').mockImplementation();
+      consoleError = vi.spyOn(console, 'error').mockImplementation();
     });
 
     afterEach(() => {
@@ -177,12 +178,12 @@ describe('StdioTransport', () => {
     it('should work with real MCPServer methods', async () => {
       // Create a more realistic server mock
       const realServer = {
-        getSDKServer: jest.fn().mockReturnValue({
-          connect: jest.fn().mockResolvedValue(undefined),
+        getSDKServer: vi.fn().mockReturnValue({
+          connect: vi.fn().mockResolvedValue(undefined),
           name: 'test-server',
           version: '1.0.0'
         }),
-        isStarted: jest.fn().mockReturnValue(false)
+        isStarted: vi.fn().mockReturnValue(false)
       } as any;
 
       transport = new StdioTransport();
@@ -194,8 +195,9 @@ describe('StdioTransport', () => {
 
   describe('Error Handling', () => {
     it('should handle SDK transport creation errors', async () => {
-      const StdioServerTransport = require('@modelcontextprotocol/sdk/server/stdio.js').StdioServerTransport;
-      StdioServerTransport.mockImplementationOnce(() => {
+      // Get the mocked module and mock it to throw
+      const { StdioServerTransport } = await vi.importMock('@modelcontextprotocol/sdk/server/stdio.js');
+      vi.mocked(StdioServerTransport).mockImplementationOnce(() => {
         throw new Error('Transport creation failed');
       });
 

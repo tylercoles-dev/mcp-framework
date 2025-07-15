@@ -1,6 +1,8 @@
+import { describe, it, expect } from 'vitest';
+import { StdioTransport } from '../src/index';
+
 describe('module exports', () => {
   it('should export StdioTransport', () => {
-    const { StdioTransport } = require('../src/index');
     expect(StdioTransport).toBeDefined();
   });
 });

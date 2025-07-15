@@ -1,9 +1,10 @@
+import { describe, it, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SSETransport } from "../src/index";
 import { z } from "zod";
 
 // Mock fetch since node-fetch v3 is ESM only
-const mockFetch = jest.fn();
-jest.mock("node-fetch", () => mockFetch);
+const mockFetch = vi.fn();
+vi.mock("node-fetch", () => ({ default: mockFetch }));
 
 describe("SSETransport", () => {
   let server: any;
@@ -14,15 +15,15 @@ describe("SSETransport", () => {
     server = {
       name: "test-server",
       version: "1.0.0",
-      getSDKServer: jest.fn().mockReturnValue({
-        connect: jest.fn().mockResolvedValue(undefined)
+      getSDKServer: vi.fn().mockReturnValue({
+        connect: vi.fn().mockResolvedValue(undefined)
       }),
-      useTransport: jest.fn(),
-      start: jest.fn().mockResolvedValue(undefined),
-      stop: jest.fn().mockResolvedValue(undefined),
-      isStarted: jest.fn().mockReturnValue(false),
-      registerTool: jest.fn(),
-      getTool: jest.fn()
+      useTransport: vi.fn(),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      isStarted: vi.fn().mockReturnValue(false),
+      registerTool: vi.fn(),
+      getTool: vi.fn()
     };
 
     transport = new SSETransport({

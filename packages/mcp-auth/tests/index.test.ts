@@ -1,7 +1,8 @@
+import { describe, it, expect } from 'vitest';
+import * as exports from '../src/index';
+
 describe('module exports', () => {
   it('should export all auth providers', () => {
-    const exports = require('../src/index');
-    
     expect(exports.AuthProvider).toBeDefined();
     expect(exports.NoAuth).toBeDefined();
     expect(exports.DevAuth).toBeDefined();
