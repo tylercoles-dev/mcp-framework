@@ -1,4 +1,5 @@
 import { AuthentikAuth } from '../src/index';
+import { ClientRegistrationRequest } from '@tylercoles/mcp-auth';
 import express, { Request, Response, Router } from 'express';
 import request from 'supertest';
 import nock from 'nock';
@@ -409,6 +410,188 @@ describe('AuthentikAuth', () => {
       const user = await restrictedAuth.authenticate(mockReq);
       expect(user).toBeDefined();
       expect(user?.username).toBe('testuser');
+    });
+  });
+
+  describe('Dynamic Client Registration', () => {
+    let authWithToken: AuthentikAuth;
+
+    beforeEach(() => {
+      authWithToken = new AuthentikAuth({
+        url: 'https://auth.example.com',
+        clientId: 'test-client',
+        clientSecret: 'test-secret',
+        registrationApiToken: 'test-api-token'
+      });
+
+      // Mock discovery endpoint
+      nock('https://auth.example.com')
+        .get('/application/o/test-client/.well-known/openid-configuration')
+        .reply(200, {
+          issuer: 'https://auth.example.com/application/o/test-client/',
+          authorization_endpoint: 'https://auth.example.com/application/o/authorize/',
+          token_endpoint: 'https://auth.example.com/application/o/token/',
+          userinfo_endpoint: 'https://auth.example.com/application/o/userinfo/',
+          jwks_uri: 'https://auth.example.com/application/o/test-client/jwks/',
+          response_types_supported: ['code'],
+          subject_types_supported: ['public'],
+          id_token_signing_alg_values_supported: ['RS256'],
+          token_endpoint_auth_methods_supported: ['client_secret_post'],
+          scopes_supported: ['openid', 'profile', 'email']
+        })
+        .persist();
+    });
+
+    it('should register a new client via Authentik API', async () => {
+      const timestamp = Date.now();
+      const providerId = 123;
+      const applicationId = 456;
+
+      // Mock OAuth2 provider creation
+      nock('https://auth.example.com')
+        .post('/api/v3/providers/oauth2/')
+        .reply(201, {
+          pk: providerId,
+          name: `mcp-testclient-${timestamp}`,
+          client_id: `mcp-${timestamp}`,
+          client_secret: 'generated-secret'
+        });
+
+      // Mock application creation
+      nock('https://auth.example.com')
+        .post('/api/v3/core/applications/')
+        .reply(201, {
+          pk: applicationId,
+          name: 'MCP testclient',
+          slug: `mcp-testclient-${timestamp}`
+        });
+
+      // Mock provider details fetch
+      nock('https://auth.example.com')
+        .get(`/api/v3/providers/oauth2/${providerId}/`)
+        .reply(200, {
+          pk: providerId,
+          client_id: `mcp-${timestamp}`,
+          client_secret: 'generated-secret'
+        });
+
+      const request: ClientRegistrationRequest = {
+        client_name: 'testclient',
+        redirect_uris: ['https://example.com/callback'],
+        grant_types: ['authorization_code'],
+        response_types: ['code'],
+        scope: 'openid profile email'
+      };
+
+      const response = await authWithToken.registerClient(request);
+
+      expect(response).toMatchObject({
+        client_id: `mcp-${timestamp}`,
+        client_secret: 'generated-secret',
+        redirect_uris: ['https://example.com/callback'],
+        grant_types: ['authorization_code'],
+        response_types: ['code'],
+        scope: 'openid profile email'
+      });
+    });
+
+    it('should throw error when API token is missing', async () => {
+      const authNoToken = new AuthentikAuth({
+        url: 'https://auth.example.com',
+        clientId: 'test-client'
+      });
+
+      const request: ClientRegistrationRequest = {
+        client_name: 'testclient',
+        redirect_uris: ['https://example.com/callback']
+      };
+
+      await expect(authNoToken.registerClient(request))
+        .rejects.toThrow('Dynamic registration requires API token configuration');
+    });
+
+    it('should handle API errors during registration', async () => {
+      nock('https://auth.example.com')
+        .post('/api/v3/providers/oauth2/')
+        .reply(401, { detail: 'Invalid token' });
+
+      const request: ClientRegistrationRequest = {
+        client_name: 'testclient',
+        redirect_uris: ['https://example.com/callback']
+      };
+
+      await expect(authWithToken.registerClient(request))
+        .rejects.toThrow('Invalid API token for dynamic registration');
+    });
+
+    it('should validate API token', async () => {
+      nock('https://auth.example.com')
+        .get('/api/v3/providers/oauth2/?page_size=1')
+        .reply(200, { results: [] });
+
+      const isValid = await authWithToken.validateRegistrationToken();
+      expect(isValid).toBe(true);
+    });
+
+    it('should fail token validation with invalid token', async () => {
+      nock('https://auth.example.com')
+        .get('/api/v3/providers/oauth2/?page_size=1')
+        .reply(401, { detail: 'Invalid token' });
+
+      const isValid = await authWithToken.validateRegistrationToken();
+      expect(isValid).toBe(false);
+    });
+
+    it('should revoke a registered client', async () => {
+      const providerId = 123;
+      const applicationId = 456;
+      const clientId = 'mcp-12345';
+
+      // Mock finding the provider
+      nock('https://auth.example.com')
+        .get(`/api/v3/providers/oauth2/?client_id=${encodeURIComponent(clientId)}`)
+        .reply(200, {
+          results: [{
+            pk: providerId,
+            client_id: clientId,
+            name: 'mcp-testclient-12345'
+          }]
+        });
+
+      // Mock finding applications
+      nock('https://auth.example.com')
+        .get(`/api/v3/core/applications/?provider=${providerId}`)
+        .reply(200, {
+          results: [{
+            pk: applicationId,
+            name: 'MCP testclient'
+          }]
+        });
+
+      // Mock deleting application
+      nock('https://auth.example.com')
+        .delete(`/api/v3/core/applications/${applicationId}/`)
+        .reply(204);
+
+      // Mock deleting provider
+      nock('https://auth.example.com')
+        .delete(`/api/v3/providers/oauth2/${providerId}/`)
+        .reply(204);
+
+      await expect(authWithToken.revokeRegistration(clientId))
+        .resolves.toBeUndefined();
+    });
+
+    it('should handle revocation when client not found', async () => {
+      const clientId = 'nonexistent-client';
+
+      nock('https://auth.example.com')
+        .get(`/api/v3/providers/oauth2/?client_id=${encodeURIComponent(clientId)}`)
+        .reply(200, { results: [] });
+
+      // Should not throw, just warn
+      await expect(authWithToken.revokeRegistration(clientId))
+        .resolves.toBeUndefined();
     });
   });
 });

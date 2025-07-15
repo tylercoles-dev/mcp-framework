@@ -25,7 +25,7 @@ export interface AuthentikConfig {
   applicationSlug?: string; // Authentik application slug (default: derived from clientId)
   allowedGroups?: string[]; // Optional: restrict access to specific groups
   sessionSecret?: string; // For passport session management
-  registrationApiToken?: string; // Optional: API token for dynamic registration
+  registrationApiToken?: string; // API token for dynamic client registration (required for non-Claude clients)
 }
 
 /**
@@ -365,9 +365,35 @@ export class AuthentikAuth extends OAuthProvider {
    * Check if dynamic registration is supported
    */
   supportsDynamicRegistration(): boolean {
-    // For Claude.ai, we return a pre-configured client
-    // Real dynamic registration requires API token
-    return true;
+    // Dynamic registration is supported if we have an API token
+    // or if we're handling Claude.ai (which uses pre-configured client)
+    return !!this.config.registrationApiToken || true; // Always return true for Claude.ai fallback
+  }
+
+  /**
+   * Test if the API token has the required permissions for dynamic registration
+   */
+  async validateRegistrationToken(): Promise<boolean> {
+    if (!this.config.registrationApiToken) {
+      return false;
+    }
+
+    try {
+      // Test by making a simple API call that requires the necessary permissions
+      const response = await axios.get(
+        `${this.config.url}/api/v3/providers/oauth2/?page_size=1`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.config.registrationApiToken}`
+          }
+        }
+      );
+
+      return response.status === 200;
+    } catch (error) {
+      console.error('API token validation failed:', error);
+      return false;
+    }
   }
 
   /**
@@ -392,13 +418,200 @@ export class AuthentikAuth extends OAuthProvider {
       };
     }
 
-    // Real dynamic registration would use Authentik API
+    // Real dynamic registration using Authentik API
     if (!this.config.registrationApiToken) {
       throw new Error('Dynamic registration requires API token configuration');
     }
 
-    // TODO: Implement real Authentik dynamic registration
-    throw new Error('Dynamic registration not yet implemented for non-Claude clients');
+    try {
+      // Generate a unique name for the provider and application
+      const timestamp = Date.now();
+      const providerName = `mcp-${request.client_name}-${timestamp}`;
+      const appName = `MCP ${request.client_name}`;
+
+      // Step 1: Create OAuth2 Provider
+      const providerResponse = await axios.post(
+        `${this.config.url}/api/v3/providers/oauth2/`,
+        {
+          name: providerName,
+          client_type: 'confidential',
+          client_id: `mcp-${timestamp}`,
+          authorization_flow: 'default-authorization-flow',
+          redirect_uris: request.redirect_uris.join('\n'),
+          signing_key: 'default-key', // Use default signing key
+          access_code_validity: 'minutes=10',
+          access_token_validity: 'minutes=5',
+          refresh_token_validity: 'days=30',
+          include_claims_in_id_token: true,
+          issuer_mode: 'per_provider',
+          scopes: request.scope || 'openid profile email',
+          sub_mode: 'user_id'
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.config.registrationApiToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const provider = providerResponse.data;
+
+      // Step 2: Create Application
+      const applicationResponse = await axios.post(
+        `${this.config.url}/api/v3/core/applications/`,
+        {
+          name: appName,
+          slug: `mcp-${request.client_name}-${timestamp}`,
+          provider: provider.pk,
+          meta_launch_url: request.redirect_uris[0] || '',
+          meta_description: `MCP application for ${request.client_name}`,
+          meta_publisher: 'MCP Framework',
+          policy_engine_mode: 'any',
+          open_in_new_tab: false
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.config.registrationApiToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const application = applicationResponse.data;
+
+      // Step 3: Get the client secret from the provider
+      const providerDetailsResponse = await axios.get(
+        `${this.config.url}/api/v3/providers/oauth2/${provider.pk}/`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.config.registrationApiToken}`
+          }
+        }
+      );
+
+      const clientSecret = providerDetailsResponse.data.client_secret;
+
+      // Return the registration response
+      return {
+        client_id: provider.client_id,
+        client_secret: clientSecret,
+        registration_access_token: this.config.registrationApiToken,
+        registration_client_uri: `${this.config.url}/api/v3/core/applications/${application.pk}/`,
+        client_id_issued_at: Math.floor(Date.now() / 1000),
+        client_secret_expires_at: 0, // Authentik doesn't expire client secrets by default
+        redirect_uris: request.redirect_uris,
+        token_endpoint_auth_method: 'client_secret_post',
+        grant_types: request.grant_types || ['authorization_code', 'refresh_token'],
+        response_types: request.response_types || ['code'],
+        scope: request.scope || 'openid profile email',
+        // Additional Authentik-specific fields
+        provider_pk: provider.pk,
+        application_pk: application.pk,
+        application_slug: application.slug
+      };
+
+    } catch (error: any) {
+      console.error('Authentik dynamic registration failed:', error);
+      
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const data = error.response?.data;
+        
+        if (status === 401) {
+          throw new Error('Invalid API token for dynamic registration');
+        } else if (status === 403) {
+          throw new Error('Insufficient permissions for dynamic registration');
+        } else if (status === 400) {
+          throw new Error(`Invalid registration request: ${JSON.stringify(data)}`);
+        }
+      }
+      
+      throw new Error(`Dynamic registration failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Revoke/delete a dynamically registered client
+   */
+  async revokeRegistration(clientId: string, registrationAccessToken?: string): Promise<void> {
+    if (!this.config.registrationApiToken && !registrationAccessToken) {
+      throw new Error('API token required for client revocation');
+    }
+
+    const token = registrationAccessToken || this.config.registrationApiToken;
+
+    try {
+      // First, find the provider with this client_id
+      const providersResponse = await axios.get(
+        `${this.config.url}/api/v3/providers/oauth2/?client_id=${encodeURIComponent(clientId)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      const providers = providersResponse.data.results;
+      if (!providers || providers.length === 0) {
+        console.warn(`No provider found with client_id: ${clientId}`);
+        return;
+      }
+
+      const provider = providers[0];
+
+      // Find applications using this provider
+      const applicationsResponse = await axios.get(
+        `${this.config.url}/api/v3/core/applications/?provider=${provider.pk}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      const applications = applicationsResponse.data.results;
+
+      // Delete applications first
+      for (const app of applications) {
+        await axios.delete(
+          `${this.config.url}/api/v3/core/applications/${app.pk}/`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+        console.log(`Deleted application: ${app.name}`);
+      }
+
+      // Then delete the provider
+      await axios.delete(
+        `${this.config.url}/api/v3/providers/oauth2/${provider.pk}/`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      console.log(`Deleted OAuth2 provider: ${provider.name}`);
+
+    } catch (error: any) {
+      console.error('Failed to revoke client registration:', error);
+      
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 401) {
+          throw new Error('Invalid token for client revocation');
+        } else if (status === 404) {
+          console.warn(`Client ${clientId} not found or already deleted`);
+          return;
+        }
+      }
+      
+      throw new Error(`Client revocation failed: ${error.message}`);
+    }
   }
 
   /**
