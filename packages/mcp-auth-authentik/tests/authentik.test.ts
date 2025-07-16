@@ -362,7 +362,7 @@ describe('AuthentikAuth', () => {
 
       await expect(
         auth.refreshToken('bad-refresh-token')
-      ).rejects.toThrow('Failed to refresh access token');
+      ).rejects.toThrow('Token refresh failed: invalid_grant - Invalid refresh token');
     });
   });
 
@@ -529,7 +529,7 @@ describe('AuthentikAuth', () => {
       };
 
       await expect(authWithToken.registerClient(request))
-        .rejects.toThrow('Invalid API token for dynamic registration');
+        .rejects.toThrow('Client registration failed: Invalid or missing authentication token');
     });
 
     it('should validate API token', async () => {

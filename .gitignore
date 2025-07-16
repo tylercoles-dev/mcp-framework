@@ -1,4 +1,5 @@
 .serena/
+.claude/
 dist/
 build/
 *.js

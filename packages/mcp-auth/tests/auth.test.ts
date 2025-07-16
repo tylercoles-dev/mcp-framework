@@ -18,6 +18,11 @@ describe('Auth Providers', () => {
       headers: {},
       session: {},
       user: undefined,
+      protocol: 'https',
+      get: vi.fn((name: string) => {
+        if (name === 'host') return 'example.com';
+        return undefined;
+      }),
       isAuthenticated: vi.fn(() => false)
     } as any;
   });
@@ -142,7 +147,7 @@ describe('Auth Providers', () => {
       // We verify it by checking that verifyToken is called with the correct token
       const mockVerifyToken = vi.spyOn(provider as any, 'verifyToken');
       await provider.authenticate(mockRequest);
-      expect(mockVerifyToken).toHaveBeenCalledWith('test-token-123');
+      expect(mockVerifyToken).toHaveBeenCalledWith('test-token-123', 'https://example.com');
     });
 
     it('should return null from getUser for bearer auth', () => {

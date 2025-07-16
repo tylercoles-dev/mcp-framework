@@ -10,7 +10,10 @@ import {
   OAuthDiscovery,
   ProtectedResourceMetadata,
   ClientRegistrationRequest,
-  ClientRegistrationResponse
+  ClientRegistrationResponse,
+  PKCEParams,
+  createOAuthError,
+  OAuthErrorResponse
 } from '@tylercoles/mcp-auth';
 
 /**
@@ -46,6 +49,170 @@ interface AuthentikUserInfo {
   nickname?: string;
   groups?: string[];
   [key: string]: any;
+}
+
+/**
+ * Helper class for creating standardized Authentik OAuth errors
+ */
+class AuthentikErrorHandler {
+  /**
+   * Map Authentik API errors to OAuth error codes
+   */
+  static mapApiError(error: any): { code: string; description: string; status: number } {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const data = error.response?.data;
+      
+      switch (status) {
+        case 400:
+          return {
+            code: 'invalid_client_metadata',
+            description: `Invalid request: ${this.extractErrorDescription(data)}`,
+            status: 400
+          };
+        case 401:
+          return {
+            code: 'invalid_token',
+            description: 'Invalid or missing authentication token',
+            status: 401
+          };
+        case 403:
+          return {
+            code: 'insufficient_scope',
+            description: 'Insufficient permissions for the requested operation',
+            status: 403
+          };
+        case 404:
+          return {
+            code: 'invalid_request',
+            description: 'Resource not found',
+            status: 404
+          };
+        case 409:
+          return {
+            code: 'invalid_client_metadata',
+            description: 'Client with this configuration already exists',
+            status: 409
+          };
+        case 429:
+          return {
+            code: 'temporarily_unavailable',
+            description: 'Rate limit exceeded. Please try again later.',
+            status: 429
+          };
+        case 500:
+        case 502:
+        case 503:
+        case 504:
+          return {
+            code: 'server_error',
+            description: 'Authentik server error. Please try again later.',
+            status: 500
+          };
+        default:
+          return {
+            code: 'server_error',
+            description: `Unexpected error: ${error.message}`,
+            status: 500
+          };
+      }
+    }
+    
+    // Non-Axios errors
+    if (error instanceof Error) {
+      if (error.message.includes('timeout')) {
+        return {
+          code: 'temporarily_unavailable',
+          description: 'Request timeout. Please try again.',
+          status: 503
+        };
+      }
+      
+      if (error.message.includes('network') || error.message.includes('connection')) {
+        return {
+          code: 'temporarily_unavailable',
+          description: 'Network error. Please check connectivity.',
+          status: 503
+        };
+      }
+    }
+    
+    return {
+      code: 'server_error',
+      description: error instanceof Error ? error.message : 'Unknown error',
+      status: 500
+    };
+  }
+  
+  /**
+   * Extract meaningful error description from Authentik API response
+   */
+  private static extractErrorDescription(data: any): string {
+    if (!data) return 'Unknown error';
+    
+    if (typeof data === 'string') return data;
+    
+    if (data.detail) return data.detail;
+    
+    if (data.error_description) return data.error_description;
+    
+    if (data.message) return data.message;
+    
+    // Handle field validation errors
+    if (data.errors || data.non_field_errors) {
+      const errors = data.errors || data.non_field_errors;
+      if (Array.isArray(errors)) {
+        return errors.join(', ');
+      }
+      if (typeof errors === 'object') {
+        return Object.values(errors).flat().join(', ');
+      }
+    }
+    
+    return JSON.stringify(data);
+  }
+  
+  /**
+   * Create OAuth error for token exchange failures
+   */
+  static createTokenError(error: any): OAuthErrorResponse {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const data = error.response?.data;
+      
+      if (data?.error) {
+        // Authentik returns OAuth-compliant errors for token endpoint
+        return createOAuthError(
+          data.error,
+          data.error_description,
+          data.error_uri
+        );
+      }
+      
+      switch (status) {
+        case 400:
+          return createOAuthError(
+            'invalid_grant',
+            'Invalid authorization code or redirect URI'
+          );
+        case 401:
+          return createOAuthError(
+            'invalid_client',
+            'Client authentication failed'
+          );
+        default:
+          return createOAuthError(
+            'server_error',
+            'Token exchange failed'
+          );
+      }
+    }
+    
+    return createOAuthError(
+      'server_error',
+      error instanceof Error ? error.message : 'Token exchange failed'
+    );
+  }
 }
 
 /**
@@ -170,8 +337,24 @@ export class AuthentikAuth extends OAuthProvider {
   /**
    * Get the authorization URL for starting OAuth flow
    */
-  async getAuthUrl(state?: string, redirectUri?: string): Promise<string> {
+  async getAuthUrl(
+    state?: string, 
+    redirectUri?: string, 
+    resource?: string, 
+    pkceParams?: PKCEParams
+  ): Promise<string> {
     const discovery = await this.getDiscovery();
+    
+    // Validate HTTPS endpoint (OAuth 2.1 requirement)
+    if (!this.validateHttpsEndpoint(discovery.authorization_endpoint)) {
+      throw new Error('Authorization endpoint must use HTTPS in production');
+    }
+    
+    // Validate resource URI if provided (RFC 8707)
+    if (resource && !this.validateResourceUri(resource)) {
+      throw new Error('Invalid resource URI format');
+    }
+    
     const params = new URLSearchParams({
       client_id: this.config.clientId,
       response_type: 'code',
@@ -182,6 +365,17 @@ export class AuthentikAuth extends OAuthProvider {
     if (state) {
       params.set('state', state);
     }
+    
+    // Add resource parameter (RFC 8707)
+    if (resource) {
+      params.set('resource', resource);
+    }
+    
+    // Add PKCE parameters (OAuth 2.1 requirement)
+    if (pkceParams) {
+      params.set('code_challenge', pkceParams.codeChallenge);
+      params.set('code_challenge_method', pkceParams.codeChallengeMethod);
+    }
 
     return `${discovery.authorization_endpoint}?${params.toString()}`;
   }
@@ -189,8 +383,19 @@ export class AuthentikAuth extends OAuthProvider {
   /**
    * Handle the OAuth callback and exchange code for tokens
    */
-  async handleCallback(code: string, state?: string, redirectUri?: string): Promise<TokenResult> {
+  async handleCallback(
+    code: string, 
+    state?: string, 
+    redirectUri?: string, 
+    resource?: string,
+    codeVerifier?: string
+  ): Promise<TokenResult> {
     const discovery = await this.getDiscovery();
+    
+    // Validate HTTPS endpoint (OAuth 2.1 requirement)
+    if (!this.validateHttpsEndpoint(discovery.token_endpoint)) {
+      throw new Error('Token endpoint must use HTTPS in production');
+    }
 
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -201,6 +406,16 @@ export class AuthentikAuth extends OAuthProvider {
 
     if (this.config.clientSecret) {
       params.set('client_secret', this.config.clientSecret);
+    }
+    
+    // Add resource parameter (RFC 8707)
+    if (resource) {
+      params.set('resource', resource);
+    }
+    
+    // Add PKCE code verifier (OAuth 2.1 requirement)
+    if (codeVerifier) {
+      params.set('code_verifier', codeVerifier);
     }
 
     try {
@@ -219,15 +434,46 @@ export class AuthentikAuth extends OAuthProvider {
       };
     } catch (error) {
       console.error('Failed to exchange code for tokens:', error);
-      throw new Error('Failed to exchange authorization code');
+      const oauthError = AuthentikErrorHandler.createTokenError(error);
+      const errorObj = new Error(`OAuth error: ${oauthError.error} - ${oauthError.error_description}`);
+      (errorObj as any).oauthError = oauthError;
+      throw errorObj;
     }
   }
 
   /**
    * Verify an access token and return the user
    */
-  async verifyToken(token: string): Promise<User | null> {
+  async verifyToken(token: string, expectedAudience?: string): Promise<User | null> {
     const discovery = await this.getDiscovery();
+    
+    // Validate HTTPS endpoint (OAuth 2.1 requirement)
+    if (!this.validateHttpsEndpoint(discovery.userinfo_endpoint)) {
+      throw new Error('Userinfo endpoint must use HTTPS in production');
+    }
+    
+    // If audience validation is required, validate the token JWT
+    if (expectedAudience) {
+      try {
+        // Decode JWT without verification to check audience
+        const payload = this.decodeJwtPayload(token);
+        
+        // Check audience claim (aud)
+        if (payload.aud) {
+          const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+          if (!audiences.includes(expectedAudience)) {
+            console.warn(`Token audience mismatch. Expected: ${expectedAudience}, Got: ${audiences.join(', ')}`);
+            return null;
+          }
+        } else {
+          console.warn(`Token missing audience claim. Expected: ${expectedAudience}`);
+          return null;
+        }
+      } catch (error) {
+        console.error('Failed to validate token audience:', error);
+        return null;
+      }
+    }
 
     try {
       const response = await axios.get<AuthentikUserInfo>(discovery.userinfo_endpoint, {
@@ -273,10 +519,37 @@ export class AuthentikAuth extends OAuthProvider {
   }
 
   /**
+   * Decode JWT payload without verification (for audience checking)
+   */
+  private decodeJwtPayload(token: string): any {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        throw new Error('Invalid JWT format');
+      }
+      
+      // Decode base64url payload
+      const payload = parts[1];
+      const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padding = '='.repeat((4 - base64.length % 4) % 4);
+      const decoded = atob(base64 + padding);
+      
+      return JSON.parse(decoded);
+    } catch (error) {
+      throw new Error(`Failed to decode JWT payload: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
    * Refresh an access token
    */
-  async refreshToken(refreshToken: string): Promise<TokenResult> {
+  async refreshToken(refreshToken: string, resource?: string): Promise<TokenResult> {
     const discovery = await this.getDiscovery();
+    
+    // Validate HTTPS endpoint (OAuth 2.1 requirement)
+    if (!this.validateHttpsEndpoint(discovery.token_endpoint)) {
+      throw new Error('Token endpoint must use HTTPS in production');
+    }
 
     const params = new URLSearchParams({
       grant_type: 'refresh_token',
@@ -286,6 +559,11 @@ export class AuthentikAuth extends OAuthProvider {
 
     if (this.config.clientSecret) {
       params.set('client_secret', this.config.clientSecret);
+    }
+    
+    // Add resource parameter (RFC 8707)
+    if (resource) {
+      params.set('resource', resource);
     }
 
     try {
@@ -304,7 +582,10 @@ export class AuthentikAuth extends OAuthProvider {
       };
     } catch (error) {
       console.error('Failed to refresh token:', error);
-      throw new Error('Failed to refresh access token');
+      const oauthError = AuthentikErrorHandler.createTokenError(error);
+      const errorObj = new Error(`Token refresh failed: ${oauthError.error} - ${oauthError.error_description}`);
+      (errorObj as any).oauthError = oauthError;
+      throw errorObj;
     }
   }
 
@@ -316,7 +597,9 @@ export class AuthentikAuth extends OAuthProvider {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      return this.verifyToken(token);
+      // Extract expected audience from request (base URL)
+      const expectedAudience = `${req.protocol}://${req.get('host')}`;
+      return this.verifyToken(token, expectedAudience);
     }
 
     // Then try session
@@ -502,20 +785,13 @@ export class AuthentikAuth extends OAuthProvider {
     } catch (error: any) {
       console.error('Authentik dynamic registration failed:', error);
       
-      if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
-        const data = error.response?.data;
-        
-        if (status === 401) {
-          throw new Error('Invalid API token for dynamic registration');
-        } else if (status === 403) {
-          throw new Error('Insufficient permissions for dynamic registration');
-        } else if (status === 400) {
-          throw new Error(`Invalid registration request: ${JSON.stringify(data)}`);
-        }
-      }
+      const errorInfo = AuthentikErrorHandler.mapApiError(error);
+      const oauthError = createOAuthError(errorInfo.code, errorInfo.description);
       
-      throw new Error(`Dynamic registration failed: ${error.message}`);
+      const errorObj = new Error(`Client registration failed: ${errorInfo.description}`);
+      (errorObj as any).oauthError = oauthError;
+      (errorObj as any).statusCode = errorInfo.status;
+      throw errorObj;
     }
   }
 
@@ -590,15 +866,19 @@ export class AuthentikAuth extends OAuthProvider {
       
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
-        if (status === 401) {
-          throw new Error('Invalid token for client revocation');
-        } else if (status === 404) {
+        if (status === 404) {
           console.warn(`Client ${clientId} not found or already deleted`);
           return;
         }
       }
       
-      throw new Error(`Client revocation failed: ${error.message}`);
+      const errorInfo = AuthentikErrorHandler.mapApiError(error);
+      const oauthError = createOAuthError(errorInfo.code, errorInfo.description);
+      
+      const errorObj = new Error(`Client revocation failed: ${errorInfo.description}`);
+      (errorObj as any).oauthError = oauthError;
+      (errorObj as any).statusCode = errorInfo.status;
+      throw errorObj;
     }
   }
 
@@ -613,7 +893,11 @@ export class AuthentikAuth extends OAuthProvider {
     router.get('/auth/login', (req, res, next) => {
       // Ensure passport is initialized
       if (!this.passportInitialized) {
-        res.status(503).json({ error: 'Auth system initializing' });
+        const errorResponse = createOAuthError(
+          'temporarily_unavailable',
+          'Authentication system initializing'
+        );
+        res.status(503).json(errorResponse);
         return;
       }
       passport.authenticate('authentik')(req, res, next);
@@ -623,7 +907,11 @@ export class AuthentikAuth extends OAuthProvider {
     router.get('/auth/callback',
       (req, res, next) => {
         if (!this.passportInitialized) {
-          res.status(503).json({ error: 'Auth system initializing' });
+          const errorResponse = createOAuthError(
+            'temporarily_unavailable',
+            'Authentication system initializing'
+          );
+          res.status(503).json(errorResponse);
           return;
         }
         next();
@@ -640,7 +928,11 @@ export class AuthentikAuth extends OAuthProvider {
     router.post('/auth/logout', (req, res) => {
       (req as any).logout((err: any) => {
         if (err) {
-          res.status(500).json({ error: 'Logout failed' });
+          const errorResponse = createOAuthError(
+            'server_error',
+            'Logout failed'
+          );
+          res.status(500).json(errorResponse);
           return;
         }
         res.json({ success: true });
@@ -651,7 +943,12 @@ export class AuthentikAuth extends OAuthProvider {
     router.get('/auth/user', (req, res) => {
       const user = this.getUser(req);
       if (!user) {
-        res.status(401).json({ error: 'Not authenticated' });
+        res.set('WWW-Authenticate', 'Bearer');
+        const errorResponse = createOAuthError(
+          'unauthorized',
+          'Authentication required'
+        );
+        res.status(401).json(errorResponse);
         return;
       }
       res.json({ user });
@@ -659,10 +956,11 @@ export class AuthentikAuth extends OAuthProvider {
 
     // Error page
     router.get('/auth/error', (_req, res) => {
-      res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Please check your credentials and try again'
-      });
+      const errorResponse = createOAuthError(
+        'access_denied',
+        'Authentication failed. Please check your credentials and try again.'
+      );
+      res.status(401).json(errorResponse);
     });
 
     // Setup session middleware

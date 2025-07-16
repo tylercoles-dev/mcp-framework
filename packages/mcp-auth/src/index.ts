@@ -1,8 +1,43 @@
 import express, { Request, Response, Router } from 'express';
+import crypto from 'crypto';
 
 /**
  * User interface representing an authenticated user
  */
+/**
+ * PKCE (Proof Key for Code Exchange) parameters
+ */
+export interface PKCEParams {
+  codeVerifier: string;
+  codeChallenge: string;
+  codeChallengeMethod: 'S256' | 'plain';
+}
+
+/**
+ * OAuth authorization parameters
+ */
+export interface OAuthAuthorizationParams {
+  clientId: string;
+  redirectUri: string;
+  scopes: string[];
+  state?: string;
+  resource?: string; // RFC 8707 Resource Indicators
+  codeChallenge?: string;
+  codeChallengeMethod?: 'S256' | 'plain';
+}
+
+/**
+ * OAuth token exchange parameters
+ */
+export interface OAuthTokenParams {
+  code: string;
+  clientId: string;
+  clientSecret?: string;
+  redirectUri: string;
+  resource?: string; // RFC 8707 Resource Indicators
+  codeVerifier?: string; // PKCE
+}
+
 export interface User {
   id: string;
   username: string;
@@ -20,6 +55,16 @@ export interface TokenResult {
   tokenType: string;
   expiresIn?: number;
   scope?: string;
+}
+
+/**
+ * OAuth error response (RFC 6749)
+ */
+export interface OAuthErrorResponse {
+  error: string;
+  error_description?: string;
+  error_uri?: string;
+  state?: string;
 }
 
 /**
@@ -103,17 +148,28 @@ export abstract class OAuthProvider extends AuthProvider {
   /**
    * Get the authorization URL for starting OAuth flow
    */
-  abstract getAuthUrl(state?: string, redirectUri?: string): string | Promise<string>;
+  abstract getAuthUrl(
+    state?: string, 
+    redirectUri?: string, 
+    resource?: string, 
+    pkceParams?: PKCEParams
+  ): string | Promise<string>;
   
   /**
    * Handle the OAuth callback and exchange code for tokens
    */
-  abstract handleCallback(code: string, state?: string, redirectUri?: string): Promise<TokenResult>;
+  abstract handleCallback(
+    code: string, 
+    state?: string, 
+    redirectUri?: string, 
+    resource?: string,
+    codeVerifier?: string
+  ): Promise<TokenResult>;
   
   /**
    * Verify an access token and return the user
    */
-  abstract verifyToken(token: string): Promise<User | null>;
+  abstract verifyToken(token: string, expectedAudience?: string): Promise<User | null>;
   
   /**
    * Get OAuth discovery metadata
@@ -128,7 +184,7 @@ export abstract class OAuthProvider extends AuthProvider {
   /**
    * Optional: Refresh an access token
    */
-  async refreshToken?(refreshToken: string): Promise<TokenResult> {
+  async refreshToken?(refreshToken: string, resource?: string): Promise<TokenResult> {
     throw new Error('Token refresh not implemented');
   }
   
@@ -152,6 +208,139 @@ export abstract class OAuthProvider extends AuthProvider {
   supportsDynamicRegistration?(): boolean {
     return false;
   }
+
+  // State storage for PKCE parameters (in-memory for single instance)
+  private pkceStore = new Map<string, PKCEParams>();
+
+  /**
+   * High-level convenience method: Start OAuth flow with automatic PKCE generation
+   * This method automatically generates PKCE parameters and stores them for later use
+   */
+  async startOAuthFlow(
+    state: string,
+    redirectUri: string,
+    resource?: string
+  ): Promise<{ authUrl: string; state: string }> {
+    // Generate PKCE parameters automatically
+    const pkceParams = this.generatePKCEParams();
+    
+    // Store PKCE parameters keyed by state for later retrieval
+    this.pkceStore.set(state, pkceParams);
+    
+    // Get authorization URL with PKCE parameters
+    const authUrl = await this.getAuthUrl(state, redirectUri, resource, pkceParams);
+    
+    return { authUrl, state };
+  }
+
+  /**
+   * High-level convenience method: Complete OAuth flow using stored PKCE parameters
+   * This method automatically retrieves and uses the PKCE code verifier
+   */
+  async completeOAuthFlow(
+    code: string,
+    state: string,
+    redirectUri: string,
+    resource?: string
+  ): Promise<TokenResult> {
+    // Retrieve stored PKCE parameters
+    const pkceParams = this.pkceStore.get(state);
+    if (!pkceParams) {
+      throw new Error('PKCE parameters not found for state. Did you call startOAuthFlow() first?');
+    }
+    
+    try {
+      // Exchange code for tokens using stored PKCE verifier
+      const result = await this.handleCallback(code, state, redirectUri, resource, pkceParams.codeVerifier);
+      
+      // Clean up stored PKCE parameters
+      this.pkceStore.delete(state);
+      
+      return result;
+    } catch (error) {
+      // Clean up on error too
+      this.pkceStore.delete(state);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear stored PKCE parameters (useful for cleanup)
+   */
+  clearPKCEState(state?: string): void {
+    if (state) {
+      this.pkceStore.delete(state);
+    } else {
+      this.pkceStore.clear();
+    }
+  }
+
+  /**
+   * Generate PKCE code verifier (OAuth 2.1 requirement)
+   */
+  protected generateCodeVerifier(): string {
+    return base64urlEncode(crypto.randomBytes(32));
+  }
+
+  /**
+   * Generate PKCE code challenge from verifier (OAuth 2.1 requirement)
+   */
+  protected generateCodeChallenge(codeVerifier: string): string {
+    const hash = crypto.createHash('sha256').update(codeVerifier).digest();
+    return base64urlEncode(hash);
+  }
+
+  /**
+   * Generate complete PKCE parameters
+   */
+  protected generatePKCEParams(): PKCEParams {
+    const codeVerifier = this.generateCodeVerifier();
+    const codeChallenge = this.generateCodeChallenge(codeVerifier);
+    return {
+      codeVerifier,
+      codeChallenge,
+      codeChallengeMethod: 'S256'
+    };
+  }
+
+  /**
+   * Validate resource URI format (RFC 8707)
+   */
+  protected validateResourceUri(resource: string): boolean {
+    try {
+      const url = new URL(resource);
+      // Must be HTTPS or localhost HTTP
+      if (url.protocol !== 'https:' && !(url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'))) {
+        return false;
+      }
+      // Must not contain fragment
+      if (url.hash) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Validate that OAuth endpoints use HTTPS (OAuth 2.1 requirement)
+   */
+  protected validateHttpsEndpoint(endpoint: string, allowLocalhost = true): boolean {
+    try {
+      const url = new URL(endpoint);
+      if (url.protocol === 'https:') {
+        return true;
+      }
+      if (allowLocalhost && url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
 }
 
 /**
@@ -206,7 +395,9 @@ export abstract class BearerTokenAuth extends AuthProvider {
     }
     
     const token = authHeader.substring(7);
-    return this.verifyToken(token);
+    // Extract expected audience from request (base URL)
+    const expectedAudience = `${req.protocol}://${req.get('host')}`;
+    return this.verifyToken(token, expectedAudience);
   }
   
   getUser(req: Request): User | null {
@@ -218,7 +409,7 @@ export abstract class BearerTokenAuth extends AuthProvider {
   /**
    * Verify a bearer token and return the user
    */
-  abstract verifyToken(token: string): Promise<User | null>;
+  abstract verifyToken(token: string, expectedAudience?: string): Promise<User | null>;
 }
 
 /**
@@ -257,11 +448,21 @@ export function createAuthMiddleware(provider: AuthProvider) {
         (req as any).user = user;
         next();
       } else {
-        res.status(401).json({ error: 'Unauthorized' });
+        // Set WWW-Authenticate header as required by OAuth 2.1
+        res.set('WWW-Authenticate', 'Bearer');
+        const errorResponse = createOAuthError(
+          'unauthorized',
+          'Authentication required'
+        );
+        res.status(401).json(errorResponse);
       }
     } catch (error) {
       console.error('Authentication error:', error);
-      res.status(500).json({ error: 'Authentication failed' });
+      const errorResponse = createOAuthError(
+        'server_error',
+        'Authentication service error'
+      );
+      res.status(500).json(errorResponse);
     }
   };
 }
@@ -289,10 +490,11 @@ export function createOAuthDiscoveryRoutes(provider: OAuthProvider): Router {
     router.post('/application/o/register/', express.json(), async (req: Request, res: Response) => {
       try {
         if (!provider.registerClient) {
-          res.status(501).json({
-            error: 'temporarily_unavailable',
-            error_description: 'Dynamic registration not available'
-          });
+          const errorResponse = createOAuthError(
+            'temporarily_unavailable',
+            'Dynamic registration not available'
+          );
+          res.status(501).json(errorResponse);
           return;
         }
         
@@ -300,10 +502,29 @@ export function createOAuthDiscoveryRoutes(provider: OAuthProvider): Router {
         res.json(response);
       } catch (error) {
         console.error('Client registration failed:', error);
-        res.status(400).json({
-          error: 'invalid_client_metadata',
-          error_description: 'Failed to register client'
-        });
+        
+        // Determine appropriate error code based on error type
+        let errorCode = 'invalid_client_metadata';
+        let statusCode = 400;
+        let description = 'Failed to register client';
+        
+        if (error instanceof Error) {
+          if (error.message.includes('token') || error.message.includes('authentication')) {
+            errorCode = 'invalid_token';
+            statusCode = 401;
+            description = 'Invalid or missing authentication token';
+          } else if (error.message.includes('permission') || error.message.includes('forbidden')) {
+            errorCode = 'insufficient_scope';
+            statusCode = 403;
+            description = 'Insufficient permissions for client registration';
+          } else if (error.message.includes('metadata') || error.message.includes('invalid')) {
+            errorCode = 'invalid_client_metadata';
+            description = error.message;
+          }
+        }
+        
+        const errorResponse = createOAuthError(errorCode, description);
+        res.status(statusCode).json(errorResponse);
       }
     });
   }
@@ -317,12 +538,49 @@ export function createOAuthDiscoveryRoutes(provider: OAuthProvider): Router {
 }
 
 /**
+ * Base64url encode (without padding) - RFC 7636
+ */
+function base64urlEncode(buffer: Buffer): string {
+  const base64 = buffer.toString('base64');
+  return base64
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+/**
  * Helper to get base URL from request
  */
 function getBaseUrl(req: Request): string {
   const protocol = req.protocol;
   const host = req.get('host');
   return `${protocol}://${host}`;
+}
+
+/**
+ * Create standardized OAuth error response (RFC 6749)
+ */
+export function createOAuthError(
+  error: string,
+  description?: string,
+  uri?: string,
+  state?: string
+): OAuthErrorResponse {
+  const errorResponse: OAuthErrorResponse = { error };
+  
+  if (description) {
+    errorResponse.error_description = description;
+  }
+  
+  if (uri) {
+    errorResponse.error_uri = uri;
+  }
+  
+  if (state) {
+    errorResponse.state = state;
+  }
+  
+  return errorResponse;
 }
 
 // Re-export express for convenience
