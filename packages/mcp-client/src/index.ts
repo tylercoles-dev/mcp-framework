@@ -157,6 +157,26 @@ export interface IEnhancedMCPClient extends IMCPClient {
     errorCount: number;
     reconnectCount: number;
   };
+  
+  /**
+   * Register an elicitation handler
+   */
+  registerElicitationHandler(handler: ElicitationHandler): () => void;
+  
+  /**
+   * Handle elicitation request manually
+   */
+  handleElicitationRequest(request: ElicitationRequest): Promise<ElicitationResponse>;
+  
+  /**
+   * Validate elicitation form values
+   */
+  validateElicitationValues(fields: ElicitationField[], values: Record<string, any>): ElicitationValidationError[];
+  
+  /**
+   * Get active elicitation requests
+   */
+  getActiveElicitationRequests(): ElicitationRequest[];
 }
 
 /**
@@ -205,6 +225,8 @@ export abstract class BaseMCPClient implements IEnhancedMCPClient {
   protected connectionStateCallbacks: Set<ConnectionStateCallback> = new Set();
   protected messageCallbacks: Set<MessageCallback> = new Set();
   protected activeRequests: Map<string, CancellationToken> = new Map();
+  protected elicitationHandlers: Set<ElicitationHandler> = new Set();
+  protected activeElicitationRequests: Map<string, ElicitationRequest> = new Map();
   protected stats = {
     connectTime: undefined as Date | undefined,
     lastActivity: undefined as Date | undefined,
@@ -513,6 +535,262 @@ export abstract class BaseMCPClient implements IEnhancedMCPClient {
   }
 
   /**
+   * Register an elicitation handler
+   */
+  registerElicitationHandler(handler: ElicitationHandler): () => void {
+    this.elicitationHandlers.add(handler);
+    return () => this.elicitationHandlers.delete(handler);
+  }
+
+  /**
+   * Handle elicitation request manually
+   */
+  async handleElicitationRequest(request: ElicitationRequest): Promise<ElicitationResponse> {
+    // Validate request
+    if (!request.id || !request.title || !Array.isArray(request.fields)) {
+      throw new Error('Invalid elicitation request format');
+    }
+
+    // Add to active requests
+    this.activeElicitationRequests.set(request.id, request);
+
+    try {
+      // Try each registered handler until one succeeds
+      for (const handler of this.elicitationHandlers) {
+        try {
+          const response = await handler(request);
+          
+          // Validate response
+          if (response.action === ElicitationAction.Accept && response.values) {
+            const validationErrors = this.validateElicitationValues(request.fields, response.values);
+            if (validationErrors.length > 0) {
+              throw new Error(`Validation failed: ${validationErrors.map(e => e.message).join(', ')}`);
+            }
+          }
+          
+          return response;
+        } catch (error) {
+          console.error('Elicitation handler failed:', error);
+          continue;
+        }
+      }
+
+      // No handler succeeded, return cancel response
+      return {
+        id: request.id,
+        action: ElicitationAction.Cancel,
+        reason: 'No elicitation handler available'
+      };
+    } finally {
+      // Remove from active requests
+      this.activeElicitationRequests.delete(request.id);
+    }
+  }
+
+  /**
+   * Validate elicitation form values
+   */
+  validateElicitationValues(fields: ElicitationField[], values: Record<string, any>): ElicitationValidationError[] {
+    const errors: ElicitationValidationError[] = [];
+
+    for (const field of fields) {
+      const value = values[field.name];
+      
+      // Check required fields
+      if (field.required && (value === undefined || value === null || value === '')) {
+        errors.push({
+          field: field.name,
+          message: `${field.label} is required`,
+          code: 'REQUIRED'
+        });
+        continue;
+      }
+
+      // Skip validation for empty optional fields
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+
+      // Type-specific validation
+      switch (field.type) {
+        case 'number':
+          if (typeof value !== 'number' && isNaN(Number(value))) {
+            errors.push({
+              field: field.name,
+              message: `${field.label} must be a valid number`,
+              code: 'INVALID_TYPE'
+            });
+          } else {
+            const numValue = typeof value === 'number' ? value : Number(value);
+            if (field.validation?.min !== undefined && numValue < field.validation.min) {
+              errors.push({
+                field: field.name,
+                message: `${field.label} must be at least ${field.validation.min}`,
+                code: 'MIN_VALUE'
+              });
+            }
+            if (field.validation?.max !== undefined && numValue > field.validation.max) {
+              errors.push({
+                field: field.name,
+                message: `${field.label} must be at most ${field.validation.max}`,
+                code: 'MAX_VALUE'
+              });
+            }
+          }
+          break;
+
+        case 'boolean':
+          if (typeof value !== 'boolean') {
+            errors.push({
+              field: field.name,
+              message: `${field.label} must be true or false`,
+              code: 'INVALID_TYPE'
+            });
+          }
+          break;
+
+        case 'email':
+          if (typeof value === 'string') {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value)) {
+              errors.push({
+                field: field.name,
+                message: `${field.label} must be a valid email address`,
+                code: 'INVALID_EMAIL'
+              });
+            }
+          }
+          break;
+
+        case 'url':
+          if (typeof value === 'string') {
+            try {
+              new URL(value);
+            } catch {
+              errors.push({
+                field: field.name,
+                message: `${field.label} must be a valid URL`,
+                code: 'INVALID_URL'
+              });
+            }
+          }
+          break;
+
+        case 'select':
+        case 'multiselect':
+          if (field.validation?.options) {
+            const validValues = field.validation.options.map(opt => opt.value);
+            if (field.type === 'select') {
+              if (!validValues.includes(value)) {
+                errors.push({
+                  field: field.name,
+                  message: `${field.label} must be one of the provided options`,
+                  code: 'INVALID_OPTION'
+                });
+              }
+            } else {
+              // multiselect
+              if (!Array.isArray(value) || !value.every(v => validValues.includes(v))) {
+                errors.push({
+                  field: field.name,
+                  message: `${field.label} must contain only valid options`,
+                  code: 'INVALID_OPTIONS'
+                });
+              }
+            }
+          }
+          break;
+
+        case 'text':
+        case 'textarea':
+        case 'password':
+          if (typeof value === 'string') {
+            if (field.validation?.minLength !== undefined && value.length < field.validation.minLength) {
+              errors.push({
+                field: field.name,
+                message: `${field.label} must be at least ${field.validation.minLength} characters`,
+                code: 'MIN_LENGTH'
+              });
+            }
+            if (field.validation?.maxLength !== undefined && value.length > field.validation.maxLength) {
+              errors.push({
+                field: field.name,
+                message: `${field.label} must be at most ${field.validation.maxLength} characters`,
+                code: 'MAX_LENGTH'
+              });
+            }
+            if (field.validation?.pattern) {
+              const regex = new RegExp(field.validation.pattern);
+              if (!regex.test(value)) {
+                errors.push({
+                  field: field.name,
+                  message: `${field.label} format is invalid`,
+                  code: 'INVALID_PATTERN'
+                });
+              }
+            }
+          }
+          break;
+      }
+
+      // Check field dependencies
+      if (field.dependencies) {
+        for (const dep of field.dependencies) {
+          if (values[dep.field] !== dep.value) {
+            errors.push({
+              field: field.name,
+              message: `${field.label} is only valid when ${dep.field} is ${dep.value}`,
+              code: 'DEPENDENCY_NOT_MET'
+            });
+          }
+        }
+      }
+    }
+
+    return errors;
+  }
+
+  /**
+   * Get active elicitation requests
+   */
+  getActiveElicitationRequests(): ElicitationRequest[] {
+    return Array.from(this.activeElicitationRequests.values());
+  }
+
+  /**
+   * Handle incoming elicitation requests from notifications
+   */
+  protected async handleElicitationNotification(notification: JSONRPCNotification): Promise<void> {
+    if (notification.method === 'notifications/elicitation/request') {
+      const request = notification.params as ElicitationRequest;
+      
+      try {
+        const response = await this.handleElicitationRequest(request);
+        
+        // Send response back to server
+        await this.sendMessage({
+          jsonrpc: '2.0',
+          method: 'elicitation/response',
+          params: response
+        });
+      } catch (error) {
+        console.error('Failed to handle elicitation request:', error);
+        
+        // Send error response
+        await this.sendMessage({
+          jsonrpc: '2.0',
+          method: 'elicitation/response',
+          params: {
+            id: request.id,
+            action: ElicitationAction.Cancel,
+            reason: error instanceof Error ? error.message : 'Unknown error'
+          }
+        });
+      }
+    }
+  }
+
+  /**
    * Clean up resources
    */
   protected cleanup(): void {
@@ -522,6 +800,8 @@ export abstract class BaseMCPClient implements IEnhancedMCPClient {
       this.reconnectTimer = undefined;
     }
     this.activeRequests.clear();
+    this.elicitationHandlers.clear();
+    this.activeElicitationRequests.clear();
     this.progressCallbacks.clear();
     this.connectionStateCallbacks.clear();
     this.messageCallbacks.clear();
@@ -604,6 +884,98 @@ export interface SessionContext {
   metadata?: Record<string, any>;
   startTime: Date;
   lastActivity: Date;
+}
+
+/**
+ * Elicitation form field types
+ */
+export type ElicitationFieldType = 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'password' | 'email' | 'url' | 'date' | 'time' | 'datetime';
+
+/**
+ * Elicitation form field definition
+ */
+export interface ElicitationField {
+  name: string;
+  type: ElicitationFieldType;
+  label: string;
+  description?: string;
+  required?: boolean;
+  defaultValue?: any;
+  placeholder?: string;
+  validation?: {
+    pattern?: string;
+    min?: number;
+    max?: number;
+    minLength?: number;
+    maxLength?: number;
+    options?: Array<{ value: any; label: string; description?: string }>;
+  };
+  dependencies?: {
+    field: string;
+    value: any;
+  }[];
+}
+
+/**
+ * Elicitation request from server to client
+ */
+export interface ElicitationRequest {
+  id: string;
+  title: string;
+  description?: string;
+  fields: ElicitationField[];
+  timeout?: number; // milliseconds
+  allowCancel?: boolean;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Elicitation response actions
+ */
+export enum ElicitationAction {
+  Accept = 'accept',
+  Decline = 'decline',
+  Cancel = 'cancel'
+}
+
+/**
+ * Elicitation response from client to server
+ */
+export interface ElicitationResponse {
+  id: string;
+  action: ElicitationAction;
+  values?: Record<string, any>;
+  reason?: string; // For decline/cancel actions
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Elicitation handler callback
+ */
+export interface ElicitationHandler {
+  (request: ElicitationRequest): Promise<ElicitationResponse>;
+}
+
+/**
+ * Elicitation validation error
+ */
+export interface ElicitationValidationError {
+  field: string;
+  message: string;
+  code: string;
+}
+
+/**
+ * Elicitation context for form state management
+ */
+export interface ElicitationContext {
+  requestId: string;
+  fields: ElicitationField[];
+  values: Record<string, any>;
+  errors: ElicitationValidationError[];
+  isSubmitting: boolean;
+  startTime: Date;
+  timeRemaining?: number;
 }
 
 /**
@@ -788,6 +1160,7 @@ export interface MCPClientFactory<TConfig extends ClientConfig = ClientConfig> {
 // Export all types and classes
 export {
   ConnectionState,
+  ElicitationAction,
   type ProgressCallback,
   type ConnectionStateCallback,
   type MessageCallback,
@@ -796,5 +1169,12 @@ export {
   type ServerConfig,
   type SessionContext,
   type IEnhancedMCPClient,
-  type IMultiServerMCPClient
+  type IMultiServerMCPClient,
+  type ElicitationFieldType,
+  type ElicitationField,
+  type ElicitationRequest,
+  type ElicitationResponse,
+  type ElicitationHandler,
+  type ElicitationValidationError,
+  type ElicitationContext
 };
