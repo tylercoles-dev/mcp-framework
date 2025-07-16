@@ -4,6 +4,58 @@ import { CallToolResult, ServerNotification, ServerRequest } from "@modelcontext
 import { z, ZodRawShape, ZodTypeAny } from "zod";
 
 /**
+ * MCP Notification interfaces
+ */
+export interface ProgressNotification {
+  method: 'notifications/progress';
+  params: {
+    progressToken: string | number;
+    progress: number;
+    total?: number;
+    message?: string;
+  };
+}
+
+export interface LoggingNotification {
+  method: 'notifications/message';
+  params: {
+    level: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency';
+    logger?: string;
+    data: any;
+  };
+}
+
+export interface CancellationNotification {
+  method: 'notifications/cancelled';
+  params: {
+    requestId: string;
+    reason?: string;
+  };
+}
+
+export interface ResourceListChangedNotification {
+  method: 'notifications/resources/list_changed';
+  params?: {};
+}
+
+export interface ResourceUpdatedNotification {
+  method: 'notifications/resources/updated';
+  params: {
+    uri: string;
+  };
+}
+
+export interface ToolListChangedNotification {
+  method: 'notifications/tools/list_changed';
+  params?: {};
+}
+
+export interface PromptListChangedNotification {
+  method: 'notifications/prompts/list_changed';
+  params?: {};
+}
+
+/**
  * Transport interface that all transports must implement
  */
 export interface Transport {
@@ -209,6 +261,13 @@ export class MCPServer {
         return handler(args, this.getContext());
       }
     );
+
+    // Notify that tool list has changed
+    if (this.started) {
+      this.sendToolListChangedNotification().catch(err => {
+        console.error('Failed to send tool list changed notification:', err);
+      });
+    }
   }
 
   /**
@@ -230,6 +289,13 @@ export class MCPServer {
     });
 
     this.sdkServer.registerResource(name, uriTemplate, config as any, handler as any);
+
+    // Notify that resource list has changed
+    if (this.started) {
+      this.sendResourceListChangedNotification().catch(err => {
+        console.error('Failed to send resource list changed notification:', err);
+      });
+    }
   }
 
   /**
@@ -267,6 +333,13 @@ export class MCPServer {
       promptConfig,
       handler as any
     );
+
+    // Notify that prompt list has changed
+    if (this.started) {
+      this.sendPromptListChangedNotification().catch(err => {
+        console.error('Failed to send prompt list changed notification:', err);
+      });
+    }
   }
 
   /**
@@ -275,6 +348,102 @@ export class MCPServer {
    */
   getSDKServer(): SDKMcpServer {
     return this.sdkServer;
+  }
+
+  /**
+   * Send a progress notification for long-running operations
+   */
+  async sendProgressNotification(
+    progressToken: string | number,
+    progress: number,
+    total?: number,
+    message?: string
+  ): Promise<void> {
+    await this.sdkServer.notification({
+      method: 'notifications/progress',
+      params: {
+        progressToken,
+        progress,
+        total,
+        message
+      }
+    });
+  }
+
+  /**
+   * Send a logging notification
+   */
+  async sendLogNotification(
+    level: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency',
+    data: any,
+    logger?: string
+  ): Promise<void> {
+    await this.sdkServer.notification({
+      method: 'notifications/message',
+      params: {
+        level,
+        logger,
+        data
+      }
+    });
+  }
+
+  /**
+   * Send a cancellation notification
+   */
+  async sendCancellationNotification(
+    requestId: string,
+    reason?: string
+  ): Promise<void> {
+    await this.sdkServer.notification({
+      method: 'notifications/cancelled',
+      params: {
+        requestId,
+        reason
+      }
+    });
+  }
+
+  /**
+   * Send notification that resource list has changed
+   */
+  async sendResourceListChangedNotification(): Promise<void> {
+    await this.sdkServer.notification({
+      method: 'notifications/resources/list_changed',
+      params: {}
+    });
+  }
+
+  /**
+   * Send notification that a resource has been updated
+   */
+  async sendResourceUpdatedNotification(uri: string): Promise<void> {
+    await this.sdkServer.notification({
+      method: 'notifications/resources/updated',
+      params: {
+        uri
+      }
+    });
+  }
+
+  /**
+   * Send notification that tool list has changed
+   */
+  async sendToolListChangedNotification(): Promise<void> {
+    await this.sdkServer.notification({
+      method: 'notifications/tools/list_changed',
+      params: {}
+    });
+  }
+
+  /**
+   * Send notification that prompt list has changed
+   */
+  async sendPromptListChangedNotification(): Promise<void> {
+    await this.sdkServer.notification({
+      method: 'notifications/prompts/list_changed',
+      params: {}
+    });
   }
 
   /**
