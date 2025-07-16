@@ -310,6 +310,11 @@ export interface ServerConfig {
   name: string;
   version: string;
   capabilities?: object;
+  pagination?: {
+    defaultPageSize?: number;
+    maxPageSize?: number;
+    cursorTTL?: number; // milliseconds
+  };
 }
 
 /**
@@ -347,6 +352,53 @@ export interface PromptInfo {
   arguments?: any[];
 }
 
+/**
+ * Pagination cursor for stable pagination
+ */
+export interface PaginationCursor {
+  token: string;
+  timestamp: number;
+  sortKey: string;
+}
+
+/**
+ * Pagination options for list requests
+ */
+export interface PaginationOptions {
+  cursor?: string;
+  limit?: number;
+}
+
+/**
+ * Paginated list result
+ */
+export interface PaginatedResult<T> {
+  items: T[];
+  nextCursor?: string;
+  hasMore: boolean;
+  total?: number;
+}
+
+/**
+ * Paginated tools result
+ */
+export interface PaginatedToolsResult extends PaginatedResult<ToolInfo> {}
+
+/**
+ * Paginated resources result
+ */
+export interface PaginatedResourcesResult extends PaginatedResult<ResourceInfo> {}
+
+/**
+ * Paginated prompts result
+ */
+export interface PaginatedPromptsResult extends PaginatedResult<PromptInfo> {}
+
+/**
+ * Paginated resource templates result
+ */
+export interface PaginatedResourceTemplatesResult extends PaginatedResult<ResourceTemplateInfo> {}
+
 export class MCPServer {
   private config: ServerConfig;
   private sdkServer: SDKMcpServer;
@@ -362,6 +414,14 @@ export class MCPServer {
   private completionHandlers: Map<string, { config: CompletionConfig; handler: CompletionHandler }> = new Map();
   private samplingConfig: SamplingConfig | null = null;
 
+  // Pagination management
+  private cursorSecret: string;
+  private paginationDefaults: {
+    defaultPageSize: number;
+    maxPageSize: number;
+    cursorTTL: number;
+  };
+
   constructor(config: ServerConfig) {
     this.config = config;
     this.sdkServer = new SDKMcpServer({
@@ -369,6 +429,134 @@ export class MCPServer {
       version: config.version,
       capabilities: config.capabilities
     });
+
+    // Initialize pagination configuration
+    this.paginationDefaults = {
+      defaultPageSize: config.pagination?.defaultPageSize || 50,
+      maxPageSize: config.pagination?.maxPageSize || 1000,
+      cursorTTL: config.pagination?.cursorTTL || 3600000 // 1 hour default
+    };
+
+    // Generate secure cursor secret for HMAC
+    this.cursorSecret = this.generateCursorSecret();
+  }
+
+  /**
+   * Generate a secure random secret for cursor HMAC
+   */
+  private generateCursorSecret(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 32; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  /**
+   * Create a cursor token for pagination
+   */
+  private createCursor(sortKey: string, timestamp: number = Date.now()): string {
+    const cursor: PaginationCursor = {
+      token: Math.random().toString(36).substring(2, 15),
+      timestamp,
+      sortKey
+    };
+
+    const payload = JSON.stringify(cursor);
+    const signature = this.createHMAC(payload);
+    
+    return Buffer.from(JSON.stringify({
+      payload,
+      signature
+    })).toString('base64');
+  }
+
+  /**
+   * Validate and parse a cursor token
+   */
+  private parseCursor(cursorString: string): PaginationCursor | null {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursorString, 'base64').toString());
+      const { payload, signature } = decoded;
+      
+      // Verify signature
+      if (this.createHMAC(payload) !== signature) {
+        return null;
+      }
+
+      const cursor: PaginationCursor = JSON.parse(payload);
+      
+      // Check expiration
+      if (Date.now() - cursor.timestamp > this.paginationDefaults.cursorTTL) {
+        return null;
+      }
+
+      return cursor;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Create HMAC signature for cursor validation
+   */
+  private createHMAC(data: string): string {
+    // Simple hash for demonstration - in production use proper HMAC
+    let hash = 0;
+    const combined = data + this.cursorSecret;
+    for (let i = 0; i < combined.length; i++) {
+      const char = combined.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  /**
+   * Paginate an array of items
+   */
+  private paginateItems<T extends { name: string }>(
+    items: T[],
+    options: PaginationOptions = {}
+  ): PaginatedResult<T> {
+    const limit = Math.min(
+      options.limit || this.paginationDefaults.defaultPageSize,
+      this.paginationDefaults.maxPageSize
+    );
+
+    // Sort items by name for stable pagination
+    const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
+    
+    let startIndex = 0;
+    
+    // If cursor provided, find starting position
+    if (options.cursor) {
+      const cursor = this.parseCursor(options.cursor);
+      if (cursor) {
+        startIndex = sortedItems.findIndex(item => item.name > cursor.sortKey);
+        if (startIndex === -1) {
+          startIndex = sortedItems.length;
+        }
+      }
+    }
+
+    const endIndex = startIndex + limit;
+    const paginatedItems = sortedItems.slice(startIndex, endIndex);
+    const hasMore = endIndex < sortedItems.length;
+    
+    let nextCursor: string | undefined;
+    if (hasMore && paginatedItems.length > 0) {
+      const lastItem = paginatedItems[paginatedItems.length - 1];
+      nextCursor = this.createCursor(lastItem.name);
+    }
+
+    return {
+      items: paginatedItems,
+      nextCursor,
+      hasMore,
+      total: sortedItems.length
+    };
   }
 
   /**
@@ -765,6 +953,63 @@ export class MCPServer {
       throw MCPErrorFactory.invalidParams('Prompt name must be a non-empty string');
     }
     return this.prompts.get(name);
+  }
+
+  /**
+   * Get paginated tools list
+   */
+  getToolsPaginated(options: PaginationOptions = {}): PaginatedToolsResult {
+    this.validatePaginationOptions(options);
+    return this.paginateItems(Array.from(this.tools.values()), options);
+  }
+
+  /**
+   * Get paginated resources list
+   */
+  getResourcesPaginated(options: PaginationOptions = {}): PaginatedResourcesResult {
+    this.validatePaginationOptions(options);
+    return this.paginateItems(Array.from(this.resources.values()), options);
+  }
+
+  /**
+   * Get paginated prompts list
+   */
+  getPromptsPaginated(options: PaginationOptions = {}): PaginatedPromptsResult {
+    this.validatePaginationOptions(options);
+    return this.paginateItems(Array.from(this.prompts.values()), options);
+  }
+
+  /**
+   * Get paginated resource templates list
+   */
+  getResourceTemplatesPaginated(options: PaginationOptions = {}): PaginatedResourceTemplatesResult {
+    this.validatePaginationOptions(options);
+    return this.paginateItems(Array.from(this.resourceTemplates.values()), options);
+  }
+
+  /**
+   * Validate pagination options
+   */
+  private validatePaginationOptions(options: PaginationOptions): void {
+    if (options.limit !== undefined) {
+      if (typeof options.limit !== 'number' || options.limit < 1) {
+        throw MCPErrorFactory.invalidParams('Limit must be a positive number');
+      }
+      if (options.limit > this.paginationDefaults.maxPageSize) {
+        throw MCPErrorFactory.invalidParams(`Limit cannot exceed ${this.paginationDefaults.maxPageSize}`);
+      }
+    }
+
+    if (options.cursor !== undefined) {
+      if (typeof options.cursor !== 'string' || options.cursor.length === 0) {
+        throw MCPErrorFactory.invalidParams('Cursor must be a non-empty string');
+      }
+      
+      const parsedCursor = this.parseCursor(options.cursor);
+      if (!parsedCursor) {
+        throw MCPErrorFactory.invalidParams('Invalid or expired cursor');
+      }
+    }
   }
 
   /**
@@ -1566,4 +1811,15 @@ export type {
   SamplingResponse,
   SamplingHandler,
   SamplingConfig
+};
+
+// Re-export pagination types
+export type {
+  PaginationCursor,
+  PaginationOptions,
+  PaginatedResult,
+  PaginatedToolsResult,
+  PaginatedResourcesResult,
+  PaginatedPromptsResult,
+  PaginatedResourceTemplatesResult
 };
