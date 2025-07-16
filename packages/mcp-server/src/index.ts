@@ -100,6 +100,58 @@ export interface ResourceConfig {
 }
 
 /**
+ * Resource template interface for dynamic resources
+ */
+export interface ResourceTemplate {
+  uriTemplate: string; // e.g., "file:///users/{userId}/documents/{docId}"
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  annotations?: Record<string, any>;
+}
+
+/**
+ * Resource template configuration
+ */
+export interface ResourceTemplateConfig {
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  annotations?: Record<string, any>;
+  parameterSchema?: Record<string, any>; // JSON schema for template parameters
+}
+
+/**
+ * Resource template handler function type
+ */
+export type ResourceTemplateHandler = (
+  uri: URL,
+  params: Record<string, string>,
+  templateParams?: Record<string, any>
+) => Promise<{
+  contents: Array<{
+    uri: string;
+    text?: string;
+    blob?: string;
+    mimeType?: string;
+  }>;
+}>;
+
+/**
+ * Resource template information
+ */
+export interface ResourceTemplateInfo {
+  name: string;
+  uriTemplate: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  annotations?: Record<string, any>;
+  parameterSchema?: Record<string, any>;
+}
+
+/**
  * Resource handler function type
  */
 export type ResourceHandler = (uri: URL, params?: any) => Promise<{
@@ -187,6 +239,7 @@ export class MCPServer {
   // Track registered items for introspection
   private tools: Map<string, ToolInfo> = new Map();
   private resources: Map<string, ResourceInfo> = new Map();
+  private resourceTemplates: Map<string, ResourceTemplateInfo> = new Map();
   private prompts: Map<string, PromptInfo> = new Map();
 
   constructor(config: ServerConfig) {
@@ -595,16 +648,214 @@ export class MCPServer {
   }
 
   /**
+   * Register a resource template with the server
+   */
+  registerResourceTemplate(
+    name: string,
+    uriTemplate: string,
+    config: ResourceTemplateConfig,
+    handler: ResourceTemplateHandler
+  ): void {
+    // Validate template name
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Resource template name must be a non-empty string');
+    }
+
+    // Validate URI template
+    if (!uriTemplate || typeof uriTemplate !== 'string') {
+      throw MCPErrorFactory.invalidParams('URI template must be a non-empty string');
+    }
+
+    // Check if template already exists
+    if (this.resourceTemplates.has(name)) {
+      throw MCPErrorFactory.invalidParams(`Resource template '${name}' is already registered`);
+    }
+
+    // Validate URI template format
+    if (!this.isValidUriTemplate(uriTemplate)) {
+      throw MCPErrorFactory.invalidParams(`Invalid URI template format: ${uriTemplate}`);
+    }
+
+    // Track resource template info
+    this.resourceTemplates.set(name, {
+      name,
+      uriTemplate,
+      title: config.title,
+      description: config.description,
+      mimeType: config.mimeType,
+      annotations: config.annotations,
+      parameterSchema: config.parameterSchema
+    });
+
+    // Create template object for SDK
+    const templateConfig = {
+      uriTemplate,
+      name,
+      title: config.title,
+      description: config.description,
+      mimeType: config.mimeType,
+      annotations: config.annotations
+    };
+
+    // Wrap handler with error handling and parameter validation
+    const wrappedHandler = async (uri: URL) => {
+      try {
+        // Extract template parameters from URI
+        const templateParams = this.extractTemplateParams(uriTemplate, uri.toString());
+        
+        // Validate parameters against schema if provided
+        if (config.parameterSchema) {
+          this.validateTemplateParams(templateParams, config.parameterSchema);
+        }
+
+        return await handler(uri, templateParams);
+      } catch (error) {
+        // Convert any error to MCP error format
+        const mcpError = MCPErrorFactory.fromError(error);
+        throw mcpError;
+      }
+    };
+
+    this.sdkServer.registerResource(name, templateConfig, config as any, wrappedHandler as any);
+
+    // Notify that resource list has changed
+    if (this.started) {
+      this.sendResourceListChangedNotification().catch(err => {
+        console.error('Failed to send resource list changed notification:', err);
+      });
+    }
+  }
+
+  /**
+   * List all registered resource templates
+   */
+  listResourceTemplates(): ResourceTemplateInfo[] {
+    return Array.from(this.resourceTemplates.values());
+  }
+
+  /**
+   * Get information about a specific resource template
+   */
+  getResourceTemplate(name: string): ResourceTemplateInfo | undefined {
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Resource template name must be a non-empty string');
+    }
+    return this.resourceTemplates.get(name);
+  }
+
+  /**
+   * Generate a resource URI from a template
+   */
+  generateResourceUri(templateName: string, params: Record<string, string>): string {
+    const template = this.getResourceTemplate(templateName);
+    if (!template) {
+      throw MCPErrorFactory.resourceNotFound(`Resource template '${templateName}' not found`);
+    }
+
+    return this.populateUriTemplate(template.uriTemplate, params);
+  }
+
+  /**
+   * Validate if a URI template format is valid
+   */
+  private isValidUriTemplate(uriTemplate: string): boolean {
+    // Basic URI template validation - checks for balanced braces
+    const bracePattern = /\{([^}]+)\}/g;
+    const matches = uriTemplate.match(bracePattern);
+    
+    if (!matches) {
+      return true; // No template variables is valid
+    }
+
+    // Check that all variables are properly formatted
+    return matches.every(match => {
+      const varName = match.slice(1, -1); // Remove braces
+      return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varName); // Valid identifier
+    });
+  }
+
+  /**
+   * Extract template parameters from a URI using a template
+   */
+  private extractTemplateParams(uriTemplate: string, uri: string): Record<string, string> {
+    // Convert URI template to regex pattern
+    const regexPattern = uriTemplate.replace(/\{([^}]+)\}/g, '([^/]+)');
+    const regex = new RegExp(`^${regexPattern}$`);
+    
+    const match = uri.match(regex);
+    if (!match) {
+      throw MCPErrorFactory.invalidParams(`URI '${uri}' does not match template '${uriTemplate}'`);
+    }
+
+    // Extract variable names from template
+    const varNames = [];
+    const varPattern = /\{([^}]+)\}/g;
+    let varMatch;
+    while ((varMatch = varPattern.exec(uriTemplate)) !== null) {
+      varNames.push(varMatch[1]);
+    }
+
+    // Map captured groups to variable names
+    const params: Record<string, string> = {};
+    for (let i = 0; i < varNames.length; i++) {
+      params[varNames[i]] = match[i + 1];
+    }
+
+    return params;
+  }
+
+  /**
+   * Populate a URI template with parameters
+   */
+  private populateUriTemplate(uriTemplate: string, params: Record<string, string>): string {
+    return uriTemplate.replace(/\{([^}]+)\}/g, (match, varName) => {
+      const value = params[varName];
+      if (value === undefined) {
+        throw MCPErrorFactory.invalidParams(`Missing parameter '${varName}' for URI template`);
+      }
+      return encodeURIComponent(value);
+    });
+  }
+
+  /**
+   * Validate template parameters against JSON schema
+   */
+  private validateTemplateParams(params: Record<string, string>, schema: Record<string, any>): void {
+    // Basic validation - in a real implementation, you'd use a JSON schema validator
+    if (schema.required && Array.isArray(schema.required)) {
+      for (const requiredParam of schema.required) {
+        if (!(requiredParam in params)) {
+          throw MCPErrorFactory.invalidParams(`Missing required parameter: ${requiredParam}`);
+        }
+      }
+    }
+
+    // Validate parameter types if specified
+    if (schema.properties) {
+      for (const [paramName, paramValue] of Object.entries(params)) {
+        const paramSchema = schema.properties[paramName];
+        if (paramSchema && paramSchema.type === 'number') {
+          if (isNaN(Number(paramValue))) {
+            throw MCPErrorFactory.invalidParams(`Parameter '${paramName}' must be a number`);
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Get a summary of all registered capabilities
    */
   getCapabilities(): {
     tools: ToolInfo[];
     resources: ResourceInfo[];
+    resourceTemplates: ResourceTemplateInfo[];
     prompts: PromptInfo[];
   } {
     return {
       tools: this.getTools(),
       resources: this.getResources(),
+      resourceTemplates: this.listResourceTemplates(),
       prompts: this.getPrompts()
     };
   }
@@ -623,3 +874,11 @@ export {
   formatMCPError
 } from "./errors.js";
 export type { MCPError } from "./errors.js";
+
+// Re-export resource template types
+export type {
+  ResourceTemplate,
+  ResourceTemplateConfig,
+  ResourceTemplateHandler,
+  ResourceTemplateInfo
+};
