@@ -57,6 +57,74 @@ export interface PromptListChangedNotification {
 }
 
 /**
+ * RFC 5424 Log Severity Levels
+ */
+export enum LogLevel {
+  Emergency = 0,   // System is unusable
+  Alert = 1,       // Action must be taken immediately
+  Critical = 2,    // Critical conditions
+  Error = 3,       // Error conditions
+  Warning = 4,     // Warning conditions
+  Notice = 5,      // Normal but significant condition
+  Info = 6,        // Informational messages
+  Debug = 7        // Debug-level messages
+}
+
+/**
+ * Log level names mapping to RFC 5424 levels
+ */
+export type LogLevelName = 'emergency' | 'alert' | 'critical' | 'error' | 'warning' | 'notice' | 'info' | 'debug';
+
+/**
+ * Advanced logging configuration
+ */
+export interface LoggingConfig {
+  level: LogLevel;
+  structured: boolean;
+  includeTimestamp: boolean;
+  includeSource: boolean;
+  maxMessageLength?: number;
+  loggers: Map<string, LogLevel>;
+}
+
+/**
+ * Structured log entry
+ */
+export interface StructuredLogEntry {
+  timestamp: string;
+  level: LogLevel;
+  levelName: LogLevelName;
+  logger?: string;
+  message: string;
+  data?: any;
+  source?: {
+    file?: string;
+    function?: string;
+    line?: number;
+  };
+  requestId?: string;
+  sessionId?: string;
+}
+
+/**
+ * Logging set level request
+ */
+export interface LoggingSetLevelRequest {
+  level: LogLevel;
+  logger?: string;
+}
+
+/**
+ * Logging capabilities
+ */
+export interface LoggingCapabilities {
+  supportedLevels: LogLevel[];
+  supportsStructuredLogs: boolean;
+  supportsLoggerNamespaces: boolean;
+  maxMessageLength?: number;
+}
+
+/**
  * Transport interface that all transports must implement
  */
 export interface Transport {
@@ -315,6 +383,14 @@ export interface ServerConfig {
     maxPageSize?: number;
     cursorTTL?: number; // milliseconds
   };
+  logging?: {
+    level?: LogLevel;
+    structured?: boolean;
+    includeTimestamp?: boolean;
+    includeSource?: boolean;
+    maxMessageLength?: number;
+    loggerLevels?: Record<string, LogLevel>;
+  };
 }
 
 /**
@@ -422,6 +498,9 @@ export class MCPServer {
     cursorTTL: number;
   };
 
+  // Logging management
+  private loggingConfig: LoggingConfig;
+
   constructor(config: ServerConfig) {
     this.config = config;
     this.sdkServer = new SDKMcpServer({
@@ -439,6 +518,26 @@ export class MCPServer {
 
     // Generate secure cursor secret for HMAC
     this.cursorSecret = this.generateCursorSecret();
+
+    // Initialize logging configuration
+    this.loggingConfig = {
+      level: config.logging?.level || LogLevel.Info,
+      structured: config.logging?.structured || false,
+      includeTimestamp: config.logging?.includeTimestamp || true,
+      includeSource: config.logging?.includeSource || false,
+      maxMessageLength: config.logging?.maxMessageLength || 8192,
+      loggers: new Map()
+    };
+
+    // Initialize logger levels from config
+    if (config.logging?.loggerLevels) {
+      for (const [logger, level] of Object.entries(config.logging.loggerLevels)) {
+        this.loggingConfig.loggers.set(logger, level);
+      }
+    }
+
+    // Register logging/setLevel endpoint
+    this.registerLoggingEndpoints();
   }
 
   /**
@@ -791,10 +890,10 @@ export class MCPServer {
   }
 
   /**
-   * Send a logging notification
+   * Send a logging notification (enhanced version)
    */
   async sendLogNotification(
-    level: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency',
+    level: LogLevelName,
     data: any,
     logger?: string
   ): Promise<void> {
@@ -865,6 +964,185 @@ export class MCPServer {
       params: {}
     });
   }
+
+  /**
+   * Register logging endpoints with the SDK server
+   */
+  private registerLoggingEndpoints(): void {
+    // Register logging/setLevel endpoint
+    this.sdkServer.setRequestHandler(
+      z.object({
+        method: z.literal('logging/setLevel'),
+        params: z.object({
+          level: z.nativeEnum(LogLevel),
+          logger: z.string().optional()
+        })
+      }),
+      async ({ params }) => {
+        await this.setLogLevel(params.level, params.logger);
+        return {};
+      }
+    );
+  }
+
+  /**
+   * Set logging level for global or specific logger
+   */
+  async setLogLevel(level: LogLevel, logger?: string): Promise<void> {
+    if (logger) {
+      this.loggingConfig.loggers.set(logger, level);
+    } else {
+      this.loggingConfig.level = level;
+    }
+
+    // Send notification about level change
+    await this.sendLogNotification(
+      this.logLevelToName(LogLevel.Info),
+      {
+        message: `Log level changed to ${this.logLevelToName(level)}`,
+        level,
+        logger
+      },
+      'mcp.server.logging'
+    );
+  }
+
+  /**
+   * Get current logging configuration
+   */
+  getLoggingConfig(): LoggingConfig {
+    return {
+      ...this.loggingConfig,
+      loggers: new Map(this.loggingConfig.loggers)
+    };
+  }
+
+  /**
+   * Get logging capabilities
+   */
+  getLoggingCapabilities(): LoggingCapabilities {
+    return {
+      supportedLevels: Object.values(LogLevel).filter(v => typeof v === 'number') as LogLevel[],
+      supportsStructuredLogs: true,
+      supportsLoggerNamespaces: true,
+      maxMessageLength: this.loggingConfig.maxMessageLength
+    };
+  }
+
+  /**
+   * Enhanced logging method with RFC 5424 levels and structured logging
+   */
+  async log(
+    level: LogLevel,
+    message: string,
+    data?: any,
+    logger?: string,
+    source?: { file?: string; function?: string; line?: number },
+    requestId?: string,
+    sessionId?: string
+  ): Promise<void> {
+    // Check if this log should be sent based on level filtering
+    if (!this.shouldLog(level, logger)) {
+      return;
+    }
+
+    // Truncate message if too long
+    let finalMessage = message;
+    if (this.loggingConfig.maxMessageLength && message.length > this.loggingConfig.maxMessageLength) {
+      finalMessage = message.substring(0, this.loggingConfig.maxMessageLength - 3) + '...';
+    }
+
+    if (this.loggingConfig.structured) {
+      // Send structured log
+      const logEntry: StructuredLogEntry = {
+        timestamp: this.loggingConfig.includeTimestamp ? new Date().toISOString() : '',
+        level,
+        levelName: this.logLevelToName(level),
+        logger,
+        message: finalMessage,
+        data,
+        source: this.loggingConfig.includeSource ? source : undefined,
+        requestId,
+        sessionId
+      };
+
+      await this.sendLogNotification(
+        this.logLevelToName(level),
+        logEntry,
+        logger
+      );
+    } else {
+      // Send simple log
+      await this.sendLogNotification(
+        this.logLevelToName(level),
+        data ? { message: finalMessage, data } : finalMessage,
+        logger
+      );
+    }
+  }
+
+  /**
+   * Convenience logging methods
+   */
+  async logDebug(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Debug, message, data, logger);
+  }
+
+  async logInfo(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Info, message, data, logger);
+  }
+
+  async logNotice(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Notice, message, data, logger);
+  }
+
+  async logWarning(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Warning, message, data, logger);
+  }
+
+  async logError(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Error, message, data, logger);
+  }
+
+  async logCritical(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Critical, message, data, logger);
+  }
+
+  async logAlert(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Alert, message, data, logger);
+  }
+
+  async logEmergency(message: string, data?: any, logger?: string): Promise<void> {
+    await this.log(LogLevel.Emergency, message, data, logger);
+  }
+
+  /**
+   * Check if a log should be sent based on level filtering
+   */
+  private shouldLog(level: LogLevel, logger?: string): boolean {
+    if (logger && this.loggingConfig.loggers.has(logger)) {
+      return level <= this.loggingConfig.loggers.get(logger)!;
+    }
+    return level <= this.loggingConfig.level;
+  }
+
+  /**
+   * Convert LogLevel enum to string name
+   */
+  private logLevelToName(level: LogLevel): LogLevelName {
+    switch (level) {
+      case LogLevel.Emergency: return 'emergency';
+      case LogLevel.Alert: return 'alert';
+      case LogLevel.Critical: return 'critical';
+      case LogLevel.Error: return 'error';
+      case LogLevel.Warning: return 'warning';
+      case LogLevel.Notice: return 'notice';
+      case LogLevel.Info: return 'info';
+      case LogLevel.Debug: return 'debug';
+      default: return 'info';
+    }
+  }
+
 
   /**
    * Start the server with all configured transports
@@ -1822,4 +2100,16 @@ export type {
   PaginatedResourcesResult,
   PaginatedPromptsResult,
   PaginatedResourceTemplatesResult
+};
+
+// Re-export logging types
+export {
+  LogLevel
+};
+export type {
+  LogLevelName,
+  LoggingConfig,
+  StructuredLogEntry,
+  LoggingSetLevelRequest,
+  LoggingCapabilities
 };
