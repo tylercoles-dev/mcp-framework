@@ -152,6 +152,48 @@ export interface ResourceTemplateInfo {
 }
 
 /**
+ * Completion request interface
+ */
+export interface CompletionRequest {
+  ref: {
+    type: 'ref/prompt' | 'ref/resource';
+    name: string;
+  };
+  argument: {
+    name: string;
+    value: string;
+  };
+}
+
+/**
+ * Completion result interface
+ */
+export interface CompletionResult {
+  completion: {
+    values: string[];
+    total?: number;
+    hasMore?: boolean;
+  };
+}
+
+/**
+ * Completion handler function type
+ */
+export type CompletionHandler = (
+  request: CompletionRequest
+) => Promise<CompletionResult>;
+
+/**
+ * Completion configuration
+ */
+export interface CompletionConfig {
+  name: string;
+  description?: string;
+  supportedTypes: Array<'ref/prompt' | 'ref/resource'>;
+  supportedArguments?: string[];
+}
+
+/**
  * Resource handler function type
  */
 export type ResourceHandler = (uri: URL, params?: any) => Promise<{
@@ -241,6 +283,7 @@ export class MCPServer {
   private resources: Map<string, ResourceInfo> = new Map();
   private resourceTemplates: Map<string, ResourceTemplateInfo> = new Map();
   private prompts: Map<string, PromptInfo> = new Map();
+  private completionHandlers: Map<string, { config: CompletionConfig; handler: CompletionHandler }> = new Map();
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -844,6 +887,277 @@ export class MCPServer {
   }
 
   /**
+   * Register a completion handler with the server
+   */
+  registerCompletion(
+    config: CompletionConfig,
+    handler: CompletionHandler
+  ): void {
+    // Validate completion name
+    if (!config.name || typeof config.name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Completion name must be a non-empty string');
+    }
+
+    // Check if completion already exists
+    if (this.completionHandlers.has(config.name)) {
+      throw MCPErrorFactory.invalidParams(`Completion '${config.name}' is already registered`);
+    }
+
+    // Validate supported types
+    if (!config.supportedTypes || !Array.isArray(config.supportedTypes) || config.supportedTypes.length === 0) {
+      throw MCPErrorFactory.invalidParams('Completion must support at least one reference type');
+    }
+
+    const validTypes = ['ref/prompt', 'ref/resource'];
+    for (const type of config.supportedTypes) {
+      if (!validTypes.includes(type)) {
+        throw MCPErrorFactory.invalidParams(`Invalid completion type: ${type}`);
+      }
+    }
+
+    // Store completion handler
+    this.completionHandlers.set(config.name, { config, handler });
+
+    // Register with SDK server using completion/complete method
+    const CompletionRequestSchema = z.object({
+      method: z.literal('completion/complete'),
+      params: z.object({
+        ref: z.object({
+          type: z.union([z.literal('ref/prompt'), z.literal('ref/resource')]),
+          name: z.string()
+        }),
+        argument: z.object({
+          name: z.string(),
+          value: z.string()
+        })
+      })
+    });
+
+    // Only register the handler once (on first completion registration)
+    if (this.completionHandlers.size === 0) {
+      this.sdkServer.setRequestHandler(CompletionRequestSchema, async (request, extra) => {
+        try {
+          const completionRequest = request.params as CompletionRequest;
+          return await this.handleCompletion(completionRequest);
+        } catch (error) {
+          const mcpError = MCPErrorFactory.fromError(error);
+          throw mcpError;
+        }
+      });
+    }
+  }
+
+  /**
+   * Handle completion requests
+   */
+  private async handleCompletion(request: CompletionRequest): Promise<CompletionResult> {
+    // Find appropriate completion handler
+    for (const [name, { config, handler }] of this.completionHandlers) {
+      // Check if this handler supports the reference type
+      if (!config.supportedTypes.includes(request.ref.type)) {
+        continue;
+      }
+
+      // Check if this handler supports the specific argument (if specified)
+      if (config.supportedArguments && !config.supportedArguments.includes(request.argument.name)) {
+        continue;
+      }
+
+      // Check if the referenced item exists
+      if (!this.referenceExists(request.ref)) {
+        continue;
+      }
+
+      try {
+        return await handler(request);
+      } catch (error) {
+        // If this handler fails, try the next one
+        console.error(`Completion handler '${name}' failed:`, error);
+        continue;
+      }
+    }
+
+    // No suitable handler found or reference doesn't exist
+    if (!this.referenceExists(request.ref)) {
+      throw MCPErrorFactory.invalidParams(
+        `Reference ${request.ref.type} '${request.ref.name}' not found`
+      );
+    }
+
+    // Return empty completion if no handler matches
+    return {
+      completion: {
+        values: [],
+        total: 0,
+        hasMore: false
+      }
+    };
+  }
+
+  /**
+   * Check if a reference exists
+   */
+  private referenceExists(ref: { type: string; name: string }): boolean {
+    switch (ref.type) {
+      case 'ref/prompt':
+        return this.prompts.has(ref.name);
+      case 'ref/resource':
+        return this.resources.has(ref.name) || this.resourceTemplates.has(ref.name);
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * List all registered completion handlers
+   */
+  listCompletions(): CompletionConfig[] {
+    return Array.from(this.completionHandlers.values()).map(({ config }) => config);
+  }
+
+  /**
+   * Get a specific completion handler configuration
+   */
+  getCompletion(name: string): CompletionConfig | undefined {
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Completion name must be a non-empty string');
+    }
+    return this.completionHandlers.get(name)?.config;
+  }
+
+  /**
+   * Get completions for a specific reference and argument
+   */
+  async getCompletions(
+    ref: { type: 'ref/prompt' | 'ref/resource'; name: string },
+    argument: { name: string; value: string }
+  ): Promise<CompletionResult> {
+    const request: CompletionRequest = { ref, argument };
+    return this.handleCompletion(request);
+  }
+
+  /**
+   * Create a default completion handler for prompts
+   */
+  registerDefaultPromptCompletion(): void {
+    this.registerCompletion(
+      {
+        name: 'default-prompt-completion',
+        description: 'Default completion for prompt arguments',
+        supportedTypes: ['ref/prompt']
+      },
+      async (request) => {
+        const prompt = this.getPrompt(request.ref.name);
+        if (!prompt) {
+          throw MCPErrorFactory.invalidParams(`Prompt '${request.ref.name}' not found`);
+        }
+
+        // Extract possible values from prompt arguments schema
+        const values: string[] = [];
+        
+        // If the prompt has argument schema, try to extract enum values
+        if (prompt.arguments && Array.isArray(prompt.arguments)) {
+          // This is a simplified implementation - in practice, you'd parse the actual schema
+          for (const arg of prompt.arguments) {
+            if (typeof arg === 'string' && arg.includes(request.argument.name)) {
+              // Add some common completion suggestions
+              values.push(...this.getCommonCompletions(request.argument.name, request.argument.value));
+            }
+          }
+        }
+
+        return {
+          completion: {
+            values: values.slice(0, 10), // Limit to 10 suggestions
+            total: values.length,
+            hasMore: values.length > 10
+          }
+        };
+      }
+    );
+  }
+
+  /**
+   * Create a default completion handler for resources
+   */
+  registerDefaultResourceCompletion(): void {
+    this.registerCompletion(
+      {
+        name: 'default-resource-completion',
+        description: 'Default completion for resource references',
+        supportedTypes: ['ref/resource']
+      },
+      async (request) => {
+        const resource = this.getResource(request.ref.name);
+        const template = this.getResourceTemplate(request.ref.name);
+        
+        if (!resource && !template) {
+          throw MCPErrorFactory.invalidParams(`Resource '${request.ref.name}' not found`);
+        }
+
+        const values: string[] = [];
+
+        // For templates, suggest parameter completions
+        if (template && request.argument.name === 'uri') {
+          const templateVars = this.extractTemplateVariables(template.uriTemplate);
+          values.push(...templateVars.map(v => `{${v}}`));
+        }
+
+        // Add common completions based on argument name and value
+        values.push(...this.getCommonCompletions(request.argument.name, request.argument.value));
+
+        return {
+          completion: {
+            values: values.slice(0, 10),
+            total: values.length,
+            hasMore: values.length > 10
+          }
+        };
+      }
+    );
+  }
+
+  /**
+   * Get common completion suggestions based on argument name and partial value
+   */
+  private getCommonCompletions(argumentName: string, partialValue: string): string[] {
+    const suggestions: string[] = [];
+    const lowerArgName = argumentName.toLowerCase();
+    const lowerValue = partialValue.toLowerCase();
+
+    // Common completions based on argument name patterns
+    if (lowerArgName.includes('file') || lowerArgName.includes('path')) {
+      suggestions.push('.txt', '.json', '.md', '.csv', '.xml');
+    } else if (lowerArgName.includes('format') || lowerArgName.includes('type')) {
+      suggestions.push('json', 'xml', 'csv', 'txt', 'markdown');
+    } else if (lowerArgName.includes('lang') || lowerArgName.includes('language')) {
+      suggestions.push('en', 'es', 'fr', 'de', 'ja', 'zh');
+    } else if (lowerArgName.includes('mode') || lowerArgName.includes('method')) {
+      suggestions.push('create', 'read', 'update', 'delete', 'list');
+    }
+
+    // Filter suggestions that start with the partial value
+    return suggestions
+      .filter(s => s.toLowerCase().startsWith(lowerValue))
+      .map(s => partialValue + s.substring(lowerValue.length));
+  }
+
+  /**
+   * Extract template variables from URI template
+   */
+  private extractTemplateVariables(uriTemplate: string): string[] {
+    const variables: string[] = [];
+    const varPattern = /\{([^}]+)\}/g;
+    let match;
+    
+    while ((match = varPattern.exec(uriTemplate)) !== null) {
+      variables.push(match[1]);
+    }
+    
+    return variables;
+  }
+
+  /**
    * Get a summary of all registered capabilities
    */
   getCapabilities(): {
@@ -851,12 +1165,14 @@ export class MCPServer {
     resources: ResourceInfo[];
     resourceTemplates: ResourceTemplateInfo[];
     prompts: PromptInfo[];
+    completions: CompletionConfig[];
   } {
     return {
       tools: this.getTools(),
       resources: this.getResources(),
       resourceTemplates: this.listResourceTemplates(),
-      prompts: this.getPrompts()
+      prompts: this.getPrompts(),
+      completions: this.listCompletions()
     };
   }
 }
@@ -881,4 +1197,12 @@ export type {
   ResourceTemplateConfig,
   ResourceTemplateHandler,
   ResourceTemplateInfo
+};
+
+// Re-export completion types
+export type {
+  CompletionRequest,
+  CompletionResult,
+  CompletionHandler,
+  CompletionConfig
 };
