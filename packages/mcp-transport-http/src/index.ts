@@ -3,7 +3,7 @@ import cors, { CorsOptions } from 'cors';
 import helmet from 'helmet';
 import { randomUUID } from 'crypto';
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { Transport, MCPServer } from "@tylercoles/mcp-server";
+import type { Transport, MCPServer, MCPErrorFactory, MCPErrorCode, formatMCPError } from "@tylercoles/mcp-server";
 import type { AuthProvider, User, OAuthProvider } from "@tylercoles/mcp-auth";
 import { createOAuthDiscoveryRoutes } from "@tylercoles/mcp-auth";
 

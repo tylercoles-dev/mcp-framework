@@ -2,6 +2,7 @@ import { ResourceMetadata, McpServer as SDKMcpServer, ToolCallback } from "@mode
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol";
 import { CallToolResult, ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types";
 import { z, ZodRawShape, ZodTypeAny } from "zod";
+import { MCPErrorFactory, MCPErrorClass, MCPError, MCPErrorCode } from "./errors.js";
 
 /**
  * MCP Notification interfaces
@@ -236,6 +237,16 @@ export class MCPServer {
     config: ToolConfig<InputArgs>,
     handler: ToolHandler<InputArgs>
   ): void {
+    // Validate tool name
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Tool name must be a non-empty string');
+    }
+
+    // Check if tool already exists
+    if (this.tools.has(name)) {
+      throw MCPErrorFactory.invalidParams(`Tool '${name}' is already registered`);
+    }
+
     // Track tool info
     this.tools.set(name, {
       name,
@@ -258,7 +269,13 @@ export class MCPServer {
       name,
       toolConfig,
       async (args: any, extra: any) => {
-        return handler(args, this.getContext());
+        try {
+          return await handler(args, this.getContext());
+        } catch (error) {
+          // Convert any error to MCP error format
+          const mcpError = MCPErrorFactory.fromError(error);
+          throw mcpError;
+        }
       }
     );
 
@@ -279,6 +296,16 @@ export class MCPServer {
     config: Omit<ResourceInfo, "name" | "uri">,
     handler: ResourceHandler
   ): void {
+    // Validate resource name
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Resource name must be a non-empty string');
+    }
+
+    // Check if resource already exists
+    if (this.resources.has(name)) {
+      throw MCPErrorFactory.invalidParams(`Resource '${name}' is already registered`);
+    }
+
     // Track resource info
     this.resources.set(name, {
       name,
@@ -288,7 +315,18 @@ export class MCPServer {
       mimeType: config.mimeType
     });
 
-    this.sdkServer.registerResource(name, uriTemplate, config as any, handler as any);
+    // Wrap handler with error handling
+    const wrappedHandler = async (uri: URL, params?: any) => {
+      try {
+        return await handler(uri, params);
+      } catch (error) {
+        // Convert any error to MCP error format
+        const mcpError = MCPErrorFactory.fromError(error);
+        throw mcpError;
+      }
+    };
+
+    this.sdkServer.registerResource(name, uriTemplate, config as any, wrappedHandler as any);
 
     // Notify that resource list has changed
     if (this.started) {
@@ -306,6 +344,16 @@ export class MCPServer {
     config: PromptConfig,
     handler: PromptHandler<T>
   ): void {
+    // Validate prompt name
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Prompt name must be a non-empty string');
+    }
+
+    // Check if prompt already exists
+    if (this.prompts.has(name)) {
+      throw MCPErrorFactory.invalidParams(`Prompt '${name}' is already registered`);
+    }
+
     // Track prompt info
     this.prompts.set(name, {
       name,
@@ -327,11 +375,22 @@ export class MCPServer {
       promptConfig.argsSchema = config.argsSchema;
     }
 
+    // Wrap handler with error handling
+    const wrappedHandler = async (args: T) => {
+      try {
+        return handler(args);
+      } catch (error) {
+        // Convert any error to MCP error format
+        const mcpError = MCPErrorFactory.fromError(error);
+        throw mcpError;
+      }
+    };
+
     // Pass through to SDK's registerPrompt
     this.sdkServer.registerPrompt(
       name,
       promptConfig,
-      handler as any
+      wrappedHandler as any
     );
 
     // Notify that prompt list has changed
@@ -495,6 +554,9 @@ export class MCPServer {
    * Get information about a specific tool
    */
   getTool(name: string): ToolInfo | undefined {
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Tool name must be a non-empty string');
+    }
     return this.tools.get(name);
   }
 
@@ -509,6 +571,9 @@ export class MCPServer {
    * Get information about a specific resource
    */
   getResource(name: string): ResourceInfo | undefined {
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Resource name must be a non-empty string');
+    }
     return this.resources.get(name);
   }
 
@@ -523,6 +588,9 @@ export class MCPServer {
    * Get information about a specific prompt
    */
   getPrompt(name: string): PromptInfo | undefined {
+    if (!name || typeof name !== 'string') {
+      throw MCPErrorFactory.invalidParams('Prompt name must be a non-empty string');
+    }
     return this.prompts.get(name);
   }
 
@@ -545,3 +613,13 @@ export class MCPServer {
 // Re-export common types from the SDK
 export { z } from "zod";
 export type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+// Re-export error types
+export {
+  MCPErrorFactory,
+  MCPErrorClass,
+  MCPErrorCode,
+  isMCPError,
+  formatMCPError
+} from "./errors.js";
+export type { MCPError } from "./errors.js";
