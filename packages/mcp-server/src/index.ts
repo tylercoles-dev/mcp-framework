@@ -194,6 +194,82 @@ export interface CompletionConfig {
 }
 
 /**
+ * Sampling message interface
+ */
+export interface SamplingMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: {
+    type: 'text' | 'image';
+    text?: string;
+    data?: string; // Base64 encoded data for images
+    mimeType?: string;
+  };
+  name?: string;
+  annotations?: Record<string, any>;
+}
+
+/**
+ * Model preferences for sampling
+ */
+export interface ModelPreferences {
+  hints?: string[];
+  costPriority?: number; // 0-1, where 0 is lowest cost, 1 is highest quality
+  speedPriority?: number; // 0-1, where 0 is slowest, 1 is fastest
+  intelligencePriority?: number; // 0-1, where 0 is simplest, 1 is most intelligent
+}
+
+/**
+ * Sampling request interface
+ */
+export interface SamplingRequest {
+  messages: SamplingMessage[];
+  modelPreferences?: ModelPreferences;
+  systemPrompt?: string;
+  includeContext?: boolean;
+  maxTokens?: number;
+  temperature?: number;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Sampling response interface
+ */
+export interface SamplingResponse {
+  model?: string;
+  stopReason?: 'endTurn' | 'stopSequence' | 'maxTokens';
+  role: 'assistant';
+  content: {
+    type: 'text';
+    text: string;
+  };
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Sampling handler function type
+ */
+export type SamplingHandler = (
+  request: SamplingRequest
+) => Promise<SamplingResponse>;
+
+/**
+ * Sampling configuration
+ */
+export interface SamplingConfig {
+  createMessage: SamplingHandler;
+  includeContext?: boolean;
+  supportedModels?: string[];
+  maxTokensLimit?: number;
+  temperatureRange?: { min: number; max: number };
+  metadata?: Record<string, any>;
+}
+
+/**
  * Resource handler function type
  */
 export type ResourceHandler = (uri: URL, params?: any) => Promise<{
@@ -284,6 +360,7 @@ export class MCPServer {
   private resourceTemplates: Map<string, ResourceTemplateInfo> = new Map();
   private prompts: Map<string, PromptInfo> = new Map();
   private completionHandlers: Map<string, { config: CompletionConfig; handler: CompletionHandler }> = new Map();
+  private samplingConfig: SamplingConfig | null = null;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -1166,14 +1243,288 @@ export class MCPServer {
     resourceTemplates: ResourceTemplateInfo[];
     prompts: PromptInfo[];
     completions: CompletionConfig[];
+    sampling?: SamplingConfig;
   } {
     return {
       tools: this.getTools(),
       resources: this.getResources(),
       resourceTemplates: this.listResourceTemplates(),
       prompts: this.getPrompts(),
-      completions: this.listCompletions()
+      completions: this.listCompletions(),
+      ...(this.samplingConfig && { sampling: this.samplingConfig })
     };
+  }
+
+  /**
+   * Register sampling functionality with the server
+   */
+  registerSampling(config: SamplingConfig): void {
+    // Validate sampling configuration
+    if (!config.createMessage || typeof config.createMessage !== 'function') {
+      throw MCPErrorFactory.invalidParams('Sampling createMessage handler must be a function');
+    }
+
+    // Validate temperature range if provided
+    if (config.temperatureRange) {
+      const { min, max } = config.temperatureRange;
+      if (typeof min !== 'number' || typeof max !== 'number' || min < 0 || max > 2 || min > max) {
+        throw MCPErrorFactory.invalidParams('Invalid temperature range: must be between 0-2 and min <= max');
+      }
+    }
+
+    // Validate max tokens limit if provided
+    if (config.maxTokensLimit && (typeof config.maxTokensLimit !== 'number' || config.maxTokensLimit <= 0)) {
+      throw MCPErrorFactory.invalidParams('Max tokens limit must be a positive number');
+    }
+
+    this.samplingConfig = config;
+
+    // Register with SDK server using sampling/createMessage method
+    const SamplingRequestSchema = z.object({
+      method: z.literal('sampling/createMessage'),
+      params: z.object({
+        messages: z.array(z.object({
+          role: z.enum(['user', 'assistant', 'system']),
+          content: z.object({
+            type: z.enum(['text', 'image']),
+            text: z.string().optional(),
+            data: z.string().optional(),
+            mimeType: z.string().optional()
+          }),
+          name: z.string().optional(),
+          annotations: z.record(z.any()).optional()
+        })),
+        modelPreferences: z.object({
+          hints: z.array(z.string()).optional(),
+          costPriority: z.number().min(0).max(1).optional(),
+          speedPriority: z.number().min(0).max(1).optional(),
+          intelligencePriority: z.number().min(0).max(1).optional()
+        }).optional(),
+        systemPrompt: z.string().optional(),
+        includeContext: z.boolean().optional(),
+        maxTokens: z.number().positive().optional(),
+        temperature: z.number().min(0).max(2).optional(),
+        metadata: z.record(z.any()).optional()
+      })
+    });
+
+    this.sdkServer.setRequestHandler(SamplingRequestSchema, async (request, extra) => {
+      try {
+        const samplingRequest = request.params as SamplingRequest;
+        return await this.handleSampling(samplingRequest);
+      } catch (error) {
+        const mcpError = MCPErrorFactory.fromError(error);
+        throw mcpError;
+      }
+    });
+  }
+
+  /**
+   * Handle sampling requests
+   */
+  private async handleSampling(request: SamplingRequest): Promise<SamplingResponse> {
+    if (!this.samplingConfig) {
+      throw MCPErrorFactory.invalidRequest('Sampling is not configured on this server');
+    }
+
+    // Validate request parameters
+    this.validateSamplingRequest(request);
+
+    // Apply server-side limits and defaults
+    const processedRequest = this.processSamplingRequest(request);
+
+    try {
+      const response = await this.samplingConfig.createMessage(processedRequest);
+      
+      // Validate response format
+      this.validateSamplingResponse(response);
+      
+      return response;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw MCPErrorFactory.internalError(`Sampling failed: ${error.message}`);
+      }
+      throw MCPErrorFactory.internalError('Sampling failed with unknown error');
+    }
+  }
+
+  /**
+   * Validate sampling request parameters
+   */
+  private validateSamplingRequest(request: SamplingRequest): void {
+    if (!request.messages || !Array.isArray(request.messages) || request.messages.length === 0) {
+      throw MCPErrorFactory.invalidParams('Sampling request must include at least one message');
+    }
+
+    // Validate each message
+    for (const [index, message] of request.messages.entries()) {
+      if (!message.role || !['user', 'assistant', 'system'].includes(message.role)) {
+        throw MCPErrorFactory.invalidParams(`Invalid role at message ${index}: must be user, assistant, or system`);
+      }
+
+      if (!message.content || typeof message.content !== 'object') {
+        throw MCPErrorFactory.invalidParams(`Invalid content at message ${index}: must be an object`);
+      }
+
+      if (!message.content.type || !['text', 'image'].includes(message.content.type)) {
+        throw MCPErrorFactory.invalidParams(`Invalid content type at message ${index}: must be text or image`);
+      }
+
+      if (message.content.type === 'text' && !message.content.text) {
+        throw MCPErrorFactory.invalidParams(`Text message at index ${index} must have text content`);
+      }
+
+      if (message.content.type === 'image' && (!message.content.data || !message.content.mimeType)) {
+        throw MCPErrorFactory.invalidParams(`Image message at index ${index} must have data and mimeType`);
+      }
+    }
+
+    // Validate model preferences if provided
+    if (request.modelPreferences) {
+      const prefs = request.modelPreferences;
+      if (prefs.costPriority !== undefined && (prefs.costPriority < 0 || prefs.costPriority > 1)) {
+        throw MCPErrorFactory.invalidParams('Cost priority must be between 0 and 1');
+      }
+      if (prefs.speedPriority !== undefined && (prefs.speedPriority < 0 || prefs.speedPriority > 1)) {
+        throw MCPErrorFactory.invalidParams('Speed priority must be between 0 and 1');
+      }
+      if (prefs.intelligencePriority !== undefined && (prefs.intelligencePriority < 0 || prefs.intelligencePriority > 1)) {
+        throw MCPErrorFactory.invalidParams('Intelligence priority must be between 0 and 1');
+      }
+    }
+
+    // Validate temperature if provided
+    if (request.temperature !== undefined) {
+      if (typeof request.temperature !== 'number' || request.temperature < 0 || request.temperature > 2) {
+        throw MCPErrorFactory.invalidParams('Temperature must be a number between 0 and 2');
+      }
+
+      // Check against server limits
+      if (this.samplingConfig?.temperatureRange) {
+        const { min, max } = this.samplingConfig.temperatureRange;
+        if (request.temperature < min || request.temperature > max) {
+          throw MCPErrorFactory.invalidParams(`Temperature must be between ${min} and ${max}`);
+        }
+      }
+    }
+
+    // Validate max tokens if provided
+    if (request.maxTokens !== undefined) {
+      if (typeof request.maxTokens !== 'number' || request.maxTokens <= 0) {
+        throw MCPErrorFactory.invalidParams('Max tokens must be a positive number');
+      }
+
+      // Check against server limits
+      if (this.samplingConfig?.maxTokensLimit && request.maxTokens > this.samplingConfig.maxTokensLimit) {
+        throw MCPErrorFactory.invalidParams(`Max tokens cannot exceed ${this.samplingConfig.maxTokensLimit}`);
+      }
+    }
+  }
+
+  /**
+   * Process sampling request with server defaults and context
+   */
+  private processSamplingRequest(request: SamplingRequest): SamplingRequest {
+    const processed = { ...request };
+
+    // Add context if enabled and available
+    if (this.samplingConfig?.includeContext !== false && request.includeContext !== false) {
+      // Add server context to the request
+      if (!processed.metadata) {
+        processed.metadata = {};
+      }
+      processed.metadata.serverContext = {
+        name: this.config.name,
+        version: this.config.version,
+        capabilities: {
+          tools: this.tools.size,
+          resources: this.resources.size,
+          prompts: this.prompts.size
+        },
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Apply server defaults
+    if (this.samplingConfig?.maxTokensLimit && !processed.maxTokens) {
+      processed.maxTokens = Math.min(this.samplingConfig.maxTokensLimit, 4096); // Default max tokens
+    }
+
+    if (this.samplingConfig?.temperatureRange && !processed.temperature) {
+      // Use middle of the allowed range as default
+      const { min, max } = this.samplingConfig.temperatureRange;
+      processed.temperature = (min + max) / 2;
+    }
+
+    return processed;
+  }
+
+  /**
+   * Validate sampling response format
+   */
+  private validateSamplingResponse(response: SamplingResponse): void {
+    if (!response || typeof response !== 'object') {
+      throw MCPErrorFactory.internalError('Sampling response must be an object');
+    }
+
+    if (response.role !== 'assistant') {
+      throw MCPErrorFactory.internalError('Sampling response role must be assistant');
+    }
+
+    if (!response.content || typeof response.content !== 'object') {
+      throw MCPErrorFactory.internalError('Sampling response must have content object');
+    }
+
+    if (response.content.type !== 'text' || typeof response.content.text !== 'string') {
+      throw MCPErrorFactory.internalError('Sampling response content must be text type with string text');
+    }
+
+    if (response.stopReason && !['endTurn', 'stopSequence', 'maxTokens'].includes(response.stopReason)) {
+      throw MCPErrorFactory.internalError('Invalid stop reason in sampling response');
+    }
+
+    if (response.usage) {
+      const { inputTokens, outputTokens, totalTokens } = response.usage;
+      if (inputTokens !== undefined && (typeof inputTokens !== 'number' || inputTokens < 0)) {
+        throw MCPErrorFactory.internalError('Invalid input tokens count in usage');
+      }
+      if (outputTokens !== undefined && (typeof outputTokens !== 'number' || outputTokens < 0)) {
+        throw MCPErrorFactory.internalError('Invalid output tokens count in usage');
+      }
+      if (totalTokens !== undefined && (typeof totalTokens !== 'number' || totalTokens < 0)) {
+        throw MCPErrorFactory.internalError('Invalid total tokens count in usage');
+      }
+    }
+  }
+
+  /**
+   * Check if sampling is available
+   */
+  isSamplingAvailable(): boolean {
+    return this.samplingConfig !== null;
+  }
+
+  /**
+   * Get sampling configuration (without sensitive handler)
+   */
+  getSamplingInfo(): Omit<SamplingConfig, 'createMessage'> | null {
+    if (!this.samplingConfig) {
+      return null;
+    }
+
+    const { createMessage, ...info } = this.samplingConfig;
+    return info;
+  }
+
+  /**
+   * Create a sampling request for testing or internal use
+   */
+  async createSamplingMessage(request: SamplingRequest): Promise<SamplingResponse> {
+    if (!this.samplingConfig) {
+      throw MCPErrorFactory.invalidRequest('Sampling is not configured on this server');
+    }
+
+    return this.handleSampling(request);
   }
 }
 
@@ -1205,4 +1556,14 @@ export type {
   CompletionResult,
   CompletionHandler,
   CompletionConfig
+};
+
+// Re-export sampling types
+export type {
+  SamplingMessage,
+  ModelPreferences,
+  SamplingRequest,
+  SamplingResponse,
+  SamplingHandler,
+  SamplingConfig
 };
