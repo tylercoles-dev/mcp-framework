@@ -26,6 +26,9 @@
       "path": "./packages/mcp-transport-http"
     },
     {
+      "path": "./packages/mcp-transport-websocket"
+    },
+    {
       "path": "./packages/mcp-auth-authentik"
     },
     {
