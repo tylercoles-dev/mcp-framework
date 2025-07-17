@@ -318,6 +318,15 @@ describe('OIDCProvider', () => {
         allowedGroups: ['admin'],
       });
       
+      // Set up discovery document for the new provider
+      nock('https://test-oidc.example.com')
+        .get('/.well-known/openid-configuration')
+        .reply(200, mockDiscovery);
+      
+      nock('https://test-oidc.example.com')
+        .get('/jwks')
+        .reply(200, mockJWKS);
+      
       await restrictedProvider.initialize();
       
       nock('https://test-oidc.example.com')
@@ -514,6 +523,15 @@ describe('OIDCProvider', () => {
         groupsClaim: 'roles',
       });
       
+      // Set up discovery document for the new provider
+      nock('https://test-oidc.example.com')
+        .get('/.well-known/openid-configuration')
+        .reply(200, mockDiscovery);
+      
+      nock('https://test-oidc.example.com')
+        .get('/jwks')
+        .reply(200, mockJWKS);
+      
       await customProvider.initialize();
       
       nock('https://test-oidc.example.com')
@@ -547,6 +565,15 @@ describe('OIDCProvider', () => {
         ...defaultConfig,
         tokenEndpointAuthMethod: 'client_secret_basic',
       });
+      
+      // Set up discovery document for the new provider
+      nock('https://test-oidc.example.com')
+        .get('/.well-known/openid-configuration')
+        .reply(200, mockDiscovery);
+      
+      nock('https://test-oidc.example.com')
+        .get('/jwks')
+        .reply(200, mockJWKS);
       
       await basicAuthProvider.initialize();
       

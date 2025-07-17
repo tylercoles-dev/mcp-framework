@@ -298,11 +298,14 @@ export class OIDCProvider extends OAuthProvider {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          throw createOAuthError(
-            errorData.error as string,
-            (errorData as any).error_description as string,
-            (errorData as any).error_uri as string
+          const oauthError = createOAuthError(
+            String(errorData.error || 'server_error'),
+            (errorData as any).error_description ? String((errorData as any).error_description) : undefined,
+            (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
+          // Convert OAuth error to regular error for throwing
+          const errorMessage = oauthError.error_description || oauthError.error;
+          throw new Error(errorMessage);
         }
         throw new Error(`Token exchange failed: ${response.statusText}`);
       }
@@ -369,7 +372,11 @@ export class OIDCProvider extends OAuthProvider {
       return this.mapClaimsToUser(userInfo);
     } catch (error) {
       console.error('Failed to verify token:', error);
-      if (error instanceof Error && error.message.includes('401')) {
+      // Check if it's a 401 error (unauthorized token)
+      if (error instanceof Error && (
+        error.message.includes('401') || 
+        error.message.includes('Unauthorized')
+      )) {
         return null;
       }
       throw error;
@@ -479,9 +486,9 @@ export class OIDCProvider extends OAuthProvider {
         const errorData = await response.json().catch(() => ({}));
         if (errorData && typeof errorData === 'object' && 'error' in errorData) {
           throw createOAuthError(
-            errorData.error as string,
-            (errorData as any).error_description as string,
-            (errorData as any).error_uri as string
+            String(errorData.error || 'server_error'),
+            (errorData as any).error_description ? String((errorData as any).error_description) : undefined,
+            (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
         }
         throw new Error(`Token refresh failed: ${response.statusText}`);
@@ -667,11 +674,14 @@ export class OIDCProvider extends OAuthProvider {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          throw createOAuthError(
-            errorData.error as string,
-            (errorData as any).error_description as string,
-            (errorData as any).error_uri as string
+          const oauthError = createOAuthError(
+            String(errorData.error || 'server_error'),
+            (errorData as any).error_description ? String((errorData as any).error_description) : undefined,
+            (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
+          // Convert OAuth error to regular error for throwing
+          const errorMessage = oauthError.error_description || oauthError.error;
+          throw new Error(errorMessage);
         }
         throw new Error(`Client registration failed: ${response.statusText}`);
       }

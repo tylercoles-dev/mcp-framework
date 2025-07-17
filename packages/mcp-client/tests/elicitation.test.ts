@@ -25,15 +25,15 @@ class MockElicitationClient extends BaseMCPClient {
   };
 
   async connect(): Promise<void> {
-    this.setConnectionState('connecting' as any);
+    this.setConnectionState(ConnectionState.Connecting);
     await this.mockSDKClient.connect();
-    this.setConnectionState('connected' as any);
+    this.setConnectionState(ConnectionState.Connected);
   }
 
   async disconnect(): Promise<void> {
-    this.setConnectionState('disconnecting' as any);
+    this.setConnectionState(ConnectionState.Disconnecting);
     await this.mockSDKClient.disconnect();
-    this.setConnectionState('disconnected' as any);
+    this.setConnectionState(ConnectionState.Disconnected);
   }
 
   async listTools() {

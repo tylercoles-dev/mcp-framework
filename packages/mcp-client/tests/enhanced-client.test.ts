@@ -482,12 +482,27 @@ describe('MultiServerMCPClient', () => {
     mockFactory = {
       create: vi.fn((config: any) => {
         const client = new MockMCPClient(config);
-        mockClients.set(config.name || 'default', client);
         return client;
       })
     };
     
     multiClient = new MultiServerMCPClient(mockFactory);
+    
+    // Override addServer to track clients by server name
+    const originalAddServer = multiClient.addServer.bind(multiClient);
+    multiClient.addServer = vi.fn(async (serverConfig) => {
+      const client = mockFactory.create(serverConfig.config);
+      mockClients.set(serverConfig.name, client);
+      
+      // Mock the connect method to avoid "not connected" errors
+      client.connect = vi.fn().mockResolvedValue(undefined);
+      
+      // Create a mock server entry in the internal servers map
+      const servers = (multiClient as any).servers;
+      servers.set(serverConfig.name, { config: serverConfig, client });
+      
+      return Promise.resolve();
+    });
   });
 
   afterEach(async () => {
