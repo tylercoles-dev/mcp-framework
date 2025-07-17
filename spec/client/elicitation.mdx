@@ -1,11 +1,15 @@
-# Elicitation
+---
+title: Elicitation
+---
 
 <div id="enable-section-numbers" />
 
 <Info>**Protocol Revision**: 2025-06-18</Info>
 
 <Note>
-  Elicitation is newly introduced in this version of the MCP specification and its design may evolve in future protocol versions.
+
+Elicitation is newly introduced in this version of the MCP specification and its design may evolve in future protocol versions.
+
 </Note>
 
 The Model Context Protocol (MCP) provides a standardized way for servers to request additional
@@ -17,22 +21,24 @@ Servers request structured data from users with JSON schemas to validate respons
 ## User Interaction Model
 
 Elicitation in MCP allows servers to implement interactive workflows by enabling user input
-requests to occur *nested* inside other MCP server features.
+requests to occur _nested_ inside other MCP server features.
 
 Implementations are free to expose elicitation through any interface pattern that suits
-their needs—the protocol itself does not mandate any specific user interaction
+their needs&mdash;the protocol itself does not mandate any specific user interaction
 model.
 
 <Warning>
-  For trust & safety and security:
 
-  * Servers **MUST NOT** use elicitation to request sensitive information.
+For trust & safety and security:
 
-  Applications **SHOULD**:
+- Servers **MUST NOT** use elicitation to request sensitive information.
 
-  * Provide UI that makes it clear which server is requesting information
-  * Allow users to review and modify their responses before sending
-  * Respect user privacy and provide clear decline and cancel options
+Applications **SHOULD**:
+
+- Provide UI that makes it clear which server is requesting information
+- Allow users to review and modify their responses before sending
+- Respect user privacy and provide clear decline and cancel options
+
 </Warning>
 
 ## Capabilities
@@ -296,23 +302,23 @@ The three response actions are:
 
 1. **Accept** (`action: "accept"`): User explicitly approved and submitted with data
 
-   * The `content` field contains the submitted data matching the requested schema
-   * Example: User clicked "Submit", "OK", "Confirm", etc.
+   - The `content` field contains the submitted data matching the requested schema
+   - Example: User clicked "Submit", "OK", "Confirm", etc.
 
 2. **Decline** (`action: "decline"`): User explicitly declined the request
 
-   * The `content` field is typically omitted
-   * Example: User clicked "Reject", "Decline", "No", etc.
+   - The `content` field is typically omitted
+   - Example: User clicked "Reject", "Decline", "No", etc.
 
 3. **Cancel** (`action: "cancel"`): User dismissed without making an explicit choice
-   * The `content` field is typically omitted
-   * Example: User closed the dialog, clicked outside, pressed Escape, etc.
+   - The `content` field is typically omitted
+   - Example: User closed the dialog, clicked outside, pressed Escape, etc.
 
 Servers should handle each state appropriately:
 
-* **Accept**: Process the submitted data
-* **Decline**: Handle explicit decline (e.g., offer alternatives)
-* **Cancel**: Handle dismissal (e.g., prompt again later)
+- **Accept**: Process the submitted data
+- **Decline**: Handle explicit decline (e.g., offer alternatives)
+- **Cancel**: Handle dismissal (e.g., prompt again later)
 
 ## Security Considerations
 

@@ -1,4 +1,6 @@
-# Ping
+---
+title: Ping
+---
 
 <div id="enable-section-numbers" />
 
@@ -37,9 +39,9 @@ A ping request is a standard JSON-RPC request with no parameters:
 ```
 
 2. If no response is received within a reasonable timeout period, the sender **MAY**:
-   * Consider the connection stale
-   * Terminate the connection
-   * Attempt reconnection procedures
+   - Consider the connection stale
+   - Terminate the connection
+   - Attempt reconnection procedures
 
 ## Usage Patterns
 
@@ -54,13 +56,13 @@ sequenceDiagram
 
 ## Implementation Considerations
 
-* Implementations **SHOULD** periodically issue pings to detect connection health
-* The frequency of pings **SHOULD** be configurable
-* Timeouts **SHOULD** be appropriate for the network environment
-* Excessive pinging **SHOULD** be avoided to reduce network overhead
+- Implementations **SHOULD** periodically issue pings to detect connection health
+- The frequency of pings **SHOULD** be configurable
+- Timeouts **SHOULD** be appropriate for the network environment
+- Excessive pinging **SHOULD** be avoided to reduce network overhead
 
 ## Error Handling
 
-* Timeouts **SHOULD** be treated as connection failures
-* Multiple failed pings **MAY** trigger connection reset
-* Implementations **SHOULD** log ping failures for diagnostics
+- Timeouts **SHOULD** be treated as connection failures
+- Multiple failed pings **MAY** trigger connection reset
+- Implementations **SHOULD** log ping failures for diagnostics

@@ -1,4 +1,6 @@
-# Completion
+---
+title: Completion
+---
 
 <div id="enable-section-numbers" />
 
@@ -18,7 +20,7 @@ For example, applications may show completion suggestions in a dropdown or popup
 users type, with the ability to filter and select from available options.
 
 However, implementations are free to expose completion through any interface pattern that
-suits their needs—the protocol itself does not mandate any specific user
+suits their needs&mdash;the protocol itself does not mandate any specific user
 interaction model.
 
 ## Capabilities
@@ -132,9 +134,9 @@ The protocol supports two types of completion references:
 
 Servers return an array of completion values ranked by relevance, with:
 
-* Maximum 100 items per response
-* Optional total number of available matches
-* Boolean indicating if additional results exist
+- Maximum 100 items per response
+- Optional total number of available matches
+- Boolean indicating if additional results exist
 
 ## Message Flow
 
@@ -156,48 +158,48 @@ sequenceDiagram
 
 ### CompleteRequest
 
-* `ref`: A `PromptReference` or `ResourceReference`
-* `argument`: Object containing:
-  * `name`: Argument name
-  * `value`: Current value
-* `context`: Object containing:
-  * `arguments`: A mapping of already-resolved argument names to their values.
+- `ref`: A `PromptReference` or `ResourceReference`
+- `argument`: Object containing:
+  - `name`: Argument name
+  - `value`: Current value
+- `context`: Object containing:
+  - `arguments`: A mapping of already-resolved argument names to their values.
 
 ### CompleteResult
 
-* `completion`: Object containing:
-  * `values`: Array of suggestions (max 100)
-  * `total`: Optional total matches
-  * `hasMore`: Additional results flag
+- `completion`: Object containing:
+  - `values`: Array of suggestions (max 100)
+  - `total`: Optional total matches
+  - `hasMore`: Additional results flag
 
 ## Error Handling
 
 Servers **SHOULD** return standard JSON-RPC errors for common failure cases:
 
-* Method not found: `-32601` (Capability not supported)
-* Invalid prompt name: `-32602` (Invalid params)
-* Missing required arguments: `-32602` (Invalid params)
-* Internal errors: `-32603` (Internal error)
+- Method not found: `-32601` (Capability not supported)
+- Invalid prompt name: `-32602` (Invalid params)
+- Missing required arguments: `-32602` (Invalid params)
+- Internal errors: `-32603` (Internal error)
 
 ## Implementation Considerations
 
 1. Servers **SHOULD**:
 
-   * Return suggestions sorted by relevance
-   * Implement fuzzy matching where appropriate
-   * Rate limit completion requests
-   * Validate all inputs
+   - Return suggestions sorted by relevance
+   - Implement fuzzy matching where appropriate
+   - Rate limit completion requests
+   - Validate all inputs
 
 2. Clients **SHOULD**:
-   * Debounce rapid completion requests
-   * Cache completion results where appropriate
-   * Handle missing or partial results gracefully
+   - Debounce rapid completion requests
+   - Cache completion results where appropriate
+   - Handle missing or partial results gracefully
 
 ## Security
 
 Implementations **MUST**:
 
-* Validate all completion inputs
-* Implement appropriate rate limiting
-* Control access to sensitive suggestions
-* Prevent completion-based information disclosure
+- Validate all completion inputs
+- Implement appropriate rate limiting
+- Control access to sensitive suggestions
+- Prevent completion-based information disclosure
