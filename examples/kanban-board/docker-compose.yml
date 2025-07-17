@@ -1,5 +1,4 @@
 # Development environment with SQLite
-version: '3.8'
 
 services:
   kanban-board:

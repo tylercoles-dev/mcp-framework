@@ -1,5 +1,4 @@
 # Production environment with MySQL
-version: '3.8'
 
 services:
   kanban-board:

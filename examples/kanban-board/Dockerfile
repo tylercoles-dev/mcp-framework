@@ -1,5 +1,5 @@
 # Multi-stage build for production-ready kanban board MCP server
-FROM node:18-alpine AS base
+FROM node:22-alpine AS base
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -18,8 +18,8 @@ COPY frontend/package*.json ./frontend/
 FROM base AS development
 
 # Install all dependencies including dev dependencies
-RUN npm ci
-RUN cd frontend && npm ci
+RUN npm i
+RUN cd frontend && npm i
 
 # Copy source code
 COPY . .
@@ -38,8 +38,8 @@ CMD ["npm", "run", "dev"]
 FROM base AS build
 
 # Install production dependencies first
-RUN npm ci --only=production && npm cache clean --force
-RUN cd frontend && npm ci --only=production && npm cache clean --force
+RUN npm i --only=production && npm cache clean --force
+RUN cd frontend && npm i --only=production && npm cache clean --force
 
 # Copy source code
 COPY . .
@@ -49,7 +49,7 @@ RUN npm run build
 RUN npm run frontend:build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:22-alpine AS production
 
 # Install runtime dependencies
 RUN apk add --no-cache \

@@ -1,6 +1,5 @@
 # Override file for local development
 # This file is automatically used by docker-compose for development overrides
-version: '3.8'
 
 services:
   kanban-board:
@@ -9,6 +8,8 @@ services:
     environment:
       - NODE_ENV=development
       - DEBUG=kanban:*
+    # Enable debugging
+      - NODE_OPTIONS=--inspect=0.0.0.0:9229
     # Mount source code for live reload
     volumes:
       - .:/app
@@ -19,6 +20,3 @@ services:
       - "3001:3001"  # MCP server
       - "5173:5173"  # Vite dev server
       - "9229:9229"  # Node.js debugging port
-    # Enable debugging
-    environment:
-      - NODE_OPTIONS=--inspect=0.0.0.0:9229
