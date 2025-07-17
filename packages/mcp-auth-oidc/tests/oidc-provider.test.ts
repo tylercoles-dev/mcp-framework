@@ -243,7 +243,7 @@ describe('OIDCProvider', () => {
         });
       
       await expect(provider.handleCallback('bad-code'))
-        .rejects.toThrow('invalid_grant');
+        .rejects.toThrow(new Error('invalid_grant'));
     });
 
     it('should include PKCE code verifier', async () => {
@@ -477,7 +477,7 @@ describe('OIDCProvider', () => {
       await expect(provider.registerClient({
         client_name: 'Test',
         redirect_uris: ['invalid'],
-      })).rejects.toThrow('invalid_client_metadata');
+      })).rejects.toThrow(new Error('invalid_client_metadata'));
     });
   });
 

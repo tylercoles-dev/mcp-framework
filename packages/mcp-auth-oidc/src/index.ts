@@ -304,7 +304,7 @@ export class OIDCProvider extends OAuthProvider {
             (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
           // Convert OAuth error to regular error for throwing
-          const errorMessage = oauthError.error_description || oauthError.error;
+          const errorMessage = oauthError.error || 'OAuth error';
           throw new Error(errorMessage);
         }
         throw new Error(`Token exchange failed: ${response.statusText}`);
@@ -324,7 +324,9 @@ export class OIDCProvider extends OAuthProvider {
     } catch (error) {
       console.error('Failed to exchange code for tokens:', error);
       if ((error as any).error) {
-        throw error; // Already an OAuth error
+        // Convert OAuth error to regular Error
+        const errorMessage = (error as any).error || 'OAuth error';
+        throw new Error(errorMessage);
       }
       throw createOAuthError(
         'server_error',
@@ -485,11 +487,14 @@ export class OIDCProvider extends OAuthProvider {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         if (errorData && typeof errorData === 'object' && 'error' in errorData) {
-          throw createOAuthError(
+          const oauthError = createOAuthError(
             String(errorData.error || 'server_error'),
             (errorData as any).error_description ? String((errorData as any).error_description) : undefined,
             (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
+          // Convert OAuth error to regular error for throwing
+          const errorMessage = oauthError.error || 'OAuth error';
+          throw new Error(errorMessage);
         }
         throw new Error(`Token refresh failed: ${response.statusText}`);
       }
@@ -508,7 +513,9 @@ export class OIDCProvider extends OAuthProvider {
     } catch (error) {
       console.error('Failed to refresh token:', error);
       if ((error as any).error) {
-        throw error; // Already an OAuth error
+        // Convert OAuth error to regular Error
+        const errorMessage = (error as any).error || 'OAuth error';
+        throw new Error(errorMessage);
       }
       throw createOAuthError(
         'server_error',
@@ -680,7 +687,7 @@ export class OIDCProvider extends OAuthProvider {
             (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
           // Convert OAuth error to regular error for throwing
-          const errorMessage = oauthError.error_description || oauthError.error;
+          const errorMessage = oauthError.error || 'OAuth error';
           throw new Error(errorMessage);
         }
         throw new Error(`Client registration failed: ${response.statusText}`);
@@ -691,7 +698,9 @@ export class OIDCProvider extends OAuthProvider {
     } catch (error) {
       console.error('Failed to register client:', error);
       if ((error as any).error) {
-        throw error; // Already an OAuth error
+        // Convert OAuth error to regular Error
+        const errorMessage = (error as any).error || 'OAuth error';
+        throw new Error(errorMessage);
       }
       throw createOAuthError(
         'server_error',
