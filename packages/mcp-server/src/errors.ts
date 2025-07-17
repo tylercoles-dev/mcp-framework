@@ -195,7 +195,7 @@ export class MCPErrorFactory {
  * Type guard to check if an error is an MCP error
  */
 export function isMCPError(error: any): error is MCPError {
-  return (
+  return Boolean(
     error &&
     typeof error === 'object' &&
     'code' in error &&

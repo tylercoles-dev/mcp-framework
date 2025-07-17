@@ -7,7 +7,8 @@ const mockSDKServer = {
   registerTool: vi.fn(),
   registerResource: vi.fn(),
   registerPrompt: vi.fn(),
-  connect: vi.fn()
+  connect: vi.fn(),
+  notification: vi.fn()  // Add notification method for enhanced logging
 };
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
@@ -170,10 +171,17 @@ describe('MCPServer - Comprehensive Tests', () => {
       const wrappedHandler = mockSDKServer.registerTool.mock.calls[0][2];
       await wrappedHandler({ message: 'test' }, {} as any);
 
-      expect(capturedContext).toEqual({
+      expect(capturedContext).toMatchObject({
         user: { id: '123', username: 'test' },
         custom: 'value'
       });
+      
+      // Verify enhanced context fields are present
+      expect(capturedContext).toHaveProperty('correlationId');
+      expect(capturedContext).toHaveProperty('requestId');
+      expect(capturedContext).toHaveProperty('traceId');
+      expect(capturedContext).toHaveProperty('spanId');
+      expect(capturedContext).toHaveProperty('startTime');
     });
 
     it('should handle tool errors gracefully', async () => {
@@ -223,7 +231,7 @@ describe('MCPServer - Comprehensive Tests', () => {
           description: 'A test resource',
           mimeType: 'text/plain'
         }),
-        handler
+        expect.any(Function)  // Handler is now wrapped for enhanced tracing
       );
 
       // Check introspection
