@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { Transport, MCPServer, MCPErrorFactory, MCPErrorCode, formatMCPError } from "@tylercoles/mcp-server";
 import type { AuthProvider, User, OAuthProvider } from "@tylercoles/mcp-auth";
 import { createOAuthDiscoveryRoutes } from "@tylercoles/mcp-auth";
+import { HttpRateLimitMiddleware, type HttpRateLimitConfig } from "@tylercoles/mcp-rate-limit";
 
 /**
  * Session configuration
@@ -39,6 +40,7 @@ export interface HttpConfig {
   trustProxy?: boolean;
   basePath?: string; // Base path for MCP endpoints (default: '/mcp')
   externalDomain?: string; // External domain for OAuth callbacks
+  rateLimit?: HttpRateLimitConfig; // Rate limiting configuration
 }
 
 /**
@@ -51,6 +53,7 @@ export class HttpTransport implements Transport {
   private mcpServer: MCPServer | null = null;
   private transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
   private authProvider: AuthProvider | null = null;
+  private rateLimitMiddleware: HttpRateLimitMiddleware | null = null;
 
   constructor(config: HttpConfig) {
     this.config = {
@@ -63,6 +66,11 @@ export class HttpTransport implements Transport {
 
     if (config.auth) {
       this.authProvider = config.auth;
+    }
+
+    // Initialize rate limiting if configured
+    if (config.rateLimit) {
+      this.rateLimitMiddleware = new HttpRateLimitMiddleware(config.rateLimit);
     }
   }
 
@@ -113,6 +121,12 @@ export class HttpTransport implements Transport {
       });
     }
 
+    // Cleanup rate limiting resources
+    if (this.rateLimitMiddleware) {
+      await this.rateLimitMiddleware.cleanup();
+      this.rateLimitMiddleware = null;
+    }
+
     this.app = null;
     this.server = null;
     this.mcpServer = null;
@@ -151,6 +165,11 @@ export class HttpTransport implements Transport {
     if (this.config.trustProxy) {
       this.app.set('trust proxy', 1);
     }
+
+    // Global rate limiting (before authentication for DDoS protection)
+    if (this.rateLimitMiddleware) {
+      this.app.use(this.rateLimitMiddleware.createGlobalMiddleware());
+    }
   }
 
   /**
@@ -179,6 +198,11 @@ export class HttpTransport implements Transport {
     // Apply auth middleware if configured
     if (this.authProvider) {
       this.app.use(basePath, this.createAuthMiddleware());
+    }
+
+    // Per-client rate limiting (after authentication for client-specific limits)
+    if (this.rateLimitMiddleware) {
+      this.app.use(basePath, this.rateLimitMiddleware.createClientMiddleware());
     }
 
     // Handle POST requests for client-to-server communication

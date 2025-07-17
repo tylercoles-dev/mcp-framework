@@ -88,7 +88,22 @@ export interface LoggingConfig {
 }
 
 /**
- * Structured log entry
+ * Performance metrics for request tracking
+ */
+export interface PerformanceMetrics {
+  correlationId: string;
+  operation: string;
+  duration: number;
+  startTime: number;
+  endTime: number;
+  success: boolean;
+  errorCode?: string;
+  payloadSize?: number;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Enhanced structured log entry with correlation and performance tracking
  */
 export interface StructuredLogEntry {
   timestamp: string;
@@ -102,8 +117,31 @@ export interface StructuredLogEntry {
     function?: string;
     line?: number;
   };
+  // Enhanced correlation fields
+  correlationId?: string;
   requestId?: string;
   sessionId?: string;
+  traceId?: string;
+  spanId?: string;
+  parentSpanId?: string;
+  // Performance fields
+  duration?: number;
+  performance?: {
+    startTime: number;
+    endTime?: number;
+    cpuUsage?: number;
+    memoryUsage?: number;
+  };
+  // Enhanced metadata
+  operation?: string;
+  component?: string;
+  version?: string;
+  userId?: string;
+  clientInfo?: {
+    userAgent?: string;
+    ipAddress?: string;
+    clientVersion?: string;
+  };
 }
 
 /**
@@ -133,11 +171,17 @@ export interface Transport {
 }
 
 /**
- * Tool handler context passed to all tool handlers
+ * Enhanced tool handler context with correlation tracking
  */
 export interface ToolContext {
   user?: any;
   requestId?: string;
+  correlationId?: string;
+  traceId?: string;
+  spanId?: string;
+  parentSpanId?: string;
+  startTime?: number;
+  sessionId?: string;
   [key: string]: any;
 }
 
@@ -372,6 +416,269 @@ export type PromptHandler<T = any> = (args: T) => {
 };
 
 /**
+ * Correlation ID and performance tracking utilities
+ */
+export class CorrelationManager {
+  /**
+   * Generate a unique correlation ID
+   */
+  static generateCorrelationId(): string {
+    return `corr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Generate a unique request ID
+   */
+  static generateRequestId(): string {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Generate a unique trace ID
+   */
+  static generateTraceId(): string {
+    // Using crypto.randomUUID if available, fallback to timestamp+random
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return `trace_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Generate a unique span ID
+   */
+  static generateSpanId(): string {
+    return `span_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Inject correlation context into existing context
+   */
+  static enhanceContext(context: ToolContext = {}): ToolContext {
+    const now = performance.now();
+    return {
+      ...context,
+      correlationId: context.correlationId || this.generateCorrelationId(),
+      requestId: context.requestId || this.generateRequestId(),
+      traceId: context.traceId || this.generateTraceId(),
+      spanId: context.spanId || this.generateSpanId(),
+      startTime: context.startTime || now,
+    };
+  }
+}
+
+/**
+ * Performance tracking for operations
+ */
+export class PerformanceTracker {
+  private metrics: Map<string, PerformanceMetrics> = new Map();
+  private onMetricCompleted?: (metric: PerformanceMetrics) => void;
+
+  constructor(onMetricCompleted?: (metric: PerformanceMetrics) => void) {
+    this.onMetricCompleted = onMetricCompleted;
+  }
+
+  /**
+   * Start tracking an operation
+   */
+  startTracking(correlationId: string, operation: string, metadata?: Record<string, any>): void {
+    const startTime = performance.now();
+    this.metrics.set(correlationId, {
+      correlationId,
+      operation,
+      startTime,
+      endTime: 0,
+      duration: 0,
+      success: false,
+      metadata
+    });
+  }
+
+  /**
+   * End tracking an operation
+   */
+  endTracking(correlationId: string, success: boolean, errorCode?: string, payloadSize?: number): PerformanceMetrics | null {
+    const metric = this.metrics.get(correlationId);
+    if (!metric) {
+      return null;
+    }
+
+    const endTime = performance.now();
+    metric.endTime = endTime;
+    metric.duration = endTime - metric.startTime;
+    metric.success = success;
+    metric.errorCode = errorCode;
+    metric.payloadSize = payloadSize;
+
+    this.metrics.delete(correlationId);
+
+    // Notify callback if provided
+    if (this.onMetricCompleted) {
+      this.onMetricCompleted(metric);
+    }
+
+    return metric;
+  }
+
+  /**
+   * Get current active tracking count
+   */
+  getActiveTrackingCount(): number {
+    return this.metrics.size;
+  }
+
+  /**
+   * Get all active tracking correlations
+   */
+  getActiveCorrelations(): string[] {
+    return Array.from(this.metrics.keys());
+  }
+
+  /**
+   * Clear all tracking (useful for cleanup)
+   */
+  clearAll(): void {
+    this.metrics.clear();
+  }
+}
+
+/**
+ * Request tracing middleware
+ */
+export class RequestTracer {
+  private performanceTracker: PerformanceTracker;
+  private logger?: (entry: StructuredLogEntry) => void;
+
+  constructor(logger?: (entry: StructuredLogEntry) => void) {
+    this.logger = logger;
+    this.performanceTracker = new PerformanceTracker((metric) => {
+      this.logPerformanceMetric(metric);
+    });
+  }
+
+  /**
+   * Start tracing a request
+   */
+  startTrace(operation: string, context?: ToolContext): ToolContext {
+    const enhancedContext = CorrelationManager.enhanceContext(context);
+    
+    this.performanceTracker.startTracking(
+      enhancedContext.correlationId!,
+      operation,
+      { component: 'mcp-server' }
+    );
+
+    this.logTraceStart(operation, enhancedContext);
+    return enhancedContext;
+  }
+
+  /**
+   * End tracing a request
+   */
+  endTrace(context: ToolContext, success: boolean, errorCode?: string, payloadSize?: number): PerformanceMetrics | null {
+    if (!context.correlationId) {
+      return null;
+    }
+
+    const metric = this.performanceTracker.endTracking(
+      context.correlationId,
+      success,
+      errorCode,
+      payloadSize
+    );
+
+    if (metric) {
+      this.logTraceEnd(metric, context);
+    }
+
+    return metric;
+  }
+
+  /**
+   * Log trace start
+   */
+  private logTraceStart(operation: string, context: ToolContext): void {
+    if (!this.logger) return;
+
+    this.logger({
+      timestamp: new Date().toISOString(),
+      level: LogLevel.Debug,
+      levelName: 'debug',
+      logger: 'RequestTracer',
+      message: `Starting operation: ${operation}`,
+      correlationId: context.correlationId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+      spanId: context.spanId,
+      operation,
+      component: 'mcp-server',
+      performance: {
+        startTime: context.startTime || performance.now()
+      }
+    });
+  }
+
+  /**
+   * Log trace end
+   */
+  private logTraceEnd(metric: PerformanceMetrics, context: ToolContext): void {
+    if (!this.logger) return;
+
+    this.logger({
+      timestamp: new Date().toISOString(),
+      level: metric.success ? LogLevel.Debug : LogLevel.Error,
+      levelName: metric.success ? 'debug' : 'error',
+      logger: 'RequestTracer',
+      message: `Completed operation: ${metric.operation} (${metric.duration.toFixed(2)}ms)`,
+      correlationId: metric.correlationId,
+      requestId: context.requestId,
+      traceId: context.traceId,
+      spanId: context.spanId,
+      operation: metric.operation,
+      component: 'mcp-server',
+      duration: metric.duration,
+      performance: {
+        startTime: metric.startTime,
+        endTime: metric.endTime
+      },
+      data: {
+        success: metric.success,
+        errorCode: metric.errorCode,
+        payloadSize: metric.payloadSize,
+        metadata: metric.metadata
+      }
+    });
+  }
+
+  /**
+   * Log performance metric
+   */
+  private logPerformanceMetric(metric: PerformanceMetrics): void {
+    if (!this.logger) return;
+
+    this.logger({
+      timestamp: new Date().toISOString(),
+      level: LogLevel.Info,
+      levelName: 'info',
+      logger: 'PerformanceTracker',
+      message: `Performance metric: ${metric.operation}`,
+      correlationId: metric.correlationId,
+      operation: metric.operation,
+      component: 'mcp-server',
+      duration: metric.duration,
+      data: metric
+    });
+  }
+
+  /**
+   * Get performance tracker for direct access
+   */
+  getPerformanceTracker(): PerformanceTracker {
+    return this.performanceTracker;
+  }
+}
+
+/**
  * Server configuration
  */
 export interface ServerConfig {
@@ -501,6 +808,9 @@ export class MCPServer {
   // Logging management
   private loggingConfig: LoggingConfig;
 
+  // Request tracing and performance monitoring
+  private requestTracer: RequestTracer;
+
   constructor(config: ServerConfig) {
     this.config = config;
     this.sdkServer = new SDKMcpServer({
@@ -535,6 +845,11 @@ export class MCPServer {
         this.loggingConfig.loggers.set(logger, level);
       }
     }
+
+    // Initialize request tracer with logging integration
+    this.requestTracer = new RequestTracer((entry: StructuredLogEntry) => {
+      this.logStructuredEntry(entry);
+    });
 
     // Register logging/setLevel endpoint
     this.registerLoggingEndpoints();
@@ -729,11 +1044,21 @@ export class MCPServer {
       name,
       toolConfig,
       async (args: any, extra: any) => {
+        // Start request tracing
+        const tracedContext = this.requestTracer.startTrace(`tool_call:${name}`, this.getContext());
+        
         try {
-          return await handler(args, this.getContext());
+          const result = await handler(args, tracedContext);
+          
+          // End tracing successfully
+          this.requestTracer.endTrace(tracedContext, true, undefined, JSON.stringify(result).length);
+          
+          return result;
         } catch (error) {
-          // Convert any error to MCP error format
+          // End tracing with error
           const mcpError = MCPErrorFactory.fromError(error);
+          this.requestTracer.endTrace(tracedContext, false, mcpError.code?.toString());
+          
           throw mcpError;
         }
       }
@@ -775,13 +1100,23 @@ export class MCPServer {
       mimeType: config.mimeType
     });
 
-    // Wrap handler with error handling
+    // Wrap handler with error handling and tracing
     const wrappedHandler = async (uri: URL, params?: any) => {
+      // Start request tracing
+      const tracedContext = this.requestTracer.startTrace(`resource_read:${name}`, this.getContext());
+      
       try {
-        return await handler(uri, params);
+        const result = await handler(uri, params);
+        
+        // End tracing successfully
+        this.requestTracer.endTrace(tracedContext, true, undefined, JSON.stringify(result).length);
+        
+        return result;
       } catch (error) {
-        // Convert any error to MCP error format
+        // End tracing with error
         const mcpError = MCPErrorFactory.fromError(error);
+        this.requestTracer.endTrace(tracedContext, false, mcpError.code?.toString());
+        
         throw mcpError;
       }
     };
@@ -835,13 +1170,23 @@ export class MCPServer {
       promptConfig.argsSchema = config.argsSchema;
     }
 
-    // Wrap handler with error handling
+    // Wrap handler with error handling and tracing
     const wrappedHandler = async (args: T) => {
+      // Start request tracing
+      const tracedContext = this.requestTracer.startTrace(`prompt_get:${name}`, this.getContext());
+      
       try {
-        return handler(args);
+        const result = handler(args);
+        
+        // End tracing successfully
+        this.requestTracer.endTrace(tracedContext, true, undefined, JSON.stringify(result).length);
+        
+        return result;
       } catch (error) {
-        // Convert any error to MCP error format
+        // End tracing with error
         const mcpError = MCPErrorFactory.fromError(error);
+        this.requestTracer.endTrace(tracedContext, false, mcpError.code?.toString());
+        
         throw mcpError;
       }
     };
@@ -969,20 +1314,22 @@ export class MCPServer {
    * Register logging endpoints with the SDK server
    */
   private registerLoggingEndpoints(): void {
-    // Register logging/setLevel endpoint
-    this.sdkServer.setRequestHandler(
-      z.object({
-        method: z.literal('logging/setLevel'),
-        params: z.object({
-          level: z.nativeEnum(LogLevel),
-          logger: z.string().optional()
-        })
-      }),
-      async ({ params }) => {
-        await this.setLogLevel(params.level, params.logger);
-        return {};
-      }
-    );
+    // Register logging/setLevel endpoint if setRequestHandler is available
+    if (typeof this.sdkServer.setRequestHandler === 'function') {
+      this.sdkServer.setRequestHandler(
+        z.object({
+          method: z.literal('logging/setLevel'),
+          params: z.object({
+            level: z.nativeEnum(LogLevel),
+            logger: z.string().optional()
+          })
+        }),
+        async ({ params }) => {
+          await this.setLogLevel(params.level, params.logger);
+          return {};
+        }
+      );
+    }
   }
 
   /**
@@ -2049,6 +2396,60 @@ export class MCPServer {
 
     return this.handleSampling(request);
   }
+
+  /**
+   * Get the request tracer for direct access to tracing capabilities
+   */
+  getRequestTracer(): RequestTracer {
+    return this.requestTracer;
+  }
+
+  /**
+   * Get performance tracker for metrics access
+   */
+  getPerformanceTracker(): PerformanceTracker {
+    return this.requestTracer.getPerformanceTracker();
+  }
+
+  /**
+   * Start manual tracing for custom operations
+   */
+  startTrace(operation: string, context?: ToolContext): ToolContext {
+    return this.requestTracer.startTrace(operation, context || this.getContext());
+  }
+
+  /**
+   * End manual tracing for custom operations
+   */
+  endTrace(context: ToolContext, success: boolean, errorCode?: string, payloadSize?: number): PerformanceMetrics | null {
+    return this.requestTracer.endTrace(context, success, errorCode, payloadSize);
+  }
+
+  /**
+   * Get current active tracing count
+   */
+  getActiveTracingCount(): number {
+    return this.requestTracer.getPerformanceTracker().getActiveTrackingCount();
+  }
+
+  /**
+   * Get all active correlation IDs
+   */
+  getActiveCorrelations(): string[] {
+    return this.requestTracer.getPerformanceTracker().getActiveCorrelations();
+  }
+
+  /**
+   * Enhanced structured logging with correlation context
+   */
+  private logStructuredEntry(entry: StructuredLogEntry): void {
+    // Send the structured log entry as a notification
+    this.sendLogNotification(entry.levelName, entry, entry.logger).catch(err => {
+      // Fallback to console if notification fails
+      console.error('Failed to send structured log notification:', err);
+      console.log('Log entry:', entry);
+    });
+  }
 }
 
 // Re-export common types from the SDK
@@ -2102,14 +2503,16 @@ export type {
   PaginatedResourceTemplatesResult
 };
 
-// Re-export logging types
-export {
-  LogLevel
-};
+// Re-export logging types (LogLevel already exported above as enum)
 export type {
   LogLevelName,
   LoggingConfig,
   StructuredLogEntry,
   LoggingSetLevelRequest,
   LoggingCapabilities
+};
+
+// Re-export tracing and performance types (classes already exported above)
+export type {
+  PerformanceMetrics
 };
