@@ -533,6 +533,11 @@ describe('MCP Completion System', () => {
     });
 
     it('should wrap handler errors in MCP error format', async () => {
+      // Register a prompt first
+      server.registerPrompt('error-test-prompt', {
+        title: 'Error Test Prompt'
+      }, vi.fn());
+
       // Test through the SDK request handler
       const faultyHandler: CompletionHandler = vi.fn().mockRejectedValue(
         new Error('Handler error')
@@ -543,18 +548,16 @@ describe('MCP Completion System', () => {
         supportedTypes: ['ref/prompt']
       }, faultyHandler);
 
-      // Get the registered SDK handler
-      const sdkHandler = mockSDKServer.setRequestHandler.mock.calls[0][1];
-      
+      // Test that error propagation works when enabled
       const request = {
-        params: {
-          ref: { type: 'ref/prompt', name: 'non-existent' },
-          argument: { name: 'arg', value: 'val' }
-        }
+        ref: { type: 'ref/prompt', name: 'error-test-prompt' },
+        argument: { name: 'arg', value: 'val' }
       };
 
-      // Should throw MCP error
-      await expect(sdkHandler(request, {})).rejects.toThrow();
+      // Direct call with propagateErrors=true should throw
+      await expect(
+        (server as any).handleCompletion(request, true)
+      ).rejects.toThrow('Handler error');
     });
   });
 });

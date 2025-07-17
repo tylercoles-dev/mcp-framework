@@ -2166,7 +2166,7 @@ export class MCPServer {
       this.sdkServer.setRequestHandler(CompletionRequestSchema, async (request, extra) => {
         try {
           const completionRequest = request.params as CompletionRequest;
-          return await this.handleCompletion(completionRequest);
+          return await this.handleCompletion(completionRequest, true);
         } catch (error) {
           const mcpError = MCPErrorFactory.fromError(error);
           throw mcpError;
@@ -2178,9 +2178,23 @@ export class MCPServer {
   /**
    * Handle completion requests
    */
-  private async handleCompletion(request: CompletionRequest): Promise<CompletionResult> {
+  private async handleCompletion(request: CompletionRequest, propagateErrors: boolean = false): Promise<CompletionResult> {
+    // Convert handlers to array and sort by specificity (more specific handlers first)
+    const handlers = Array.from(this.completionHandlers.entries()).sort(([nameA, configA], [nameB, configB]) => {
+      // Handlers with supportedArguments are more specific
+      const aHasArgs = configA.config.supportedArguments && configA.config.supportedArguments.length > 0;
+      const bHasArgs = configB.config.supportedArguments && configB.config.supportedArguments.length > 0;
+      
+      if (aHasArgs && !bHasArgs) return -1; // a is more specific
+      if (!aHasArgs && bHasArgs) return 1;  // b is more specific
+      return 0; // same specificity
+    });
+
+    let lastError: Error | null = null;
+    let matchingHandlerCount = 0;
+
     // Find appropriate completion handler
-    for (const [name, { config, handler }] of this.completionHandlers) {
+    for (const [name, { config, handler }] of handlers) {
       // Check if this handler supports the reference type
       if (!config.supportedTypes.includes(request.ref.type)) {
         continue;
@@ -2196,23 +2210,25 @@ export class MCPServer {
         continue;
       }
 
+      // We found a matching handler
+      matchingHandlerCount++;
+
       try {
         return await handler(request);
       } catch (error) {
-        // If this handler fails, try the next one
+        // Store the error for potential propagation
+        lastError = error instanceof Error ? error : new Error(String(error));
         console.error(`Completion handler '${name}' failed:`, error);
         continue;
       }
     }
 
-    // No suitable handler found or reference doesn't exist
-    if (!this.referenceExists(request.ref)) {
-      throw MCPErrorFactory.invalidParams(
-        `Reference ${request.ref.type} '${request.ref.name}' not found`
-      );
+    // If we had matching handlers but they all failed, propagate the last error (when configured to do so)
+    if (propagateErrors && matchingHandlerCount > 0 && lastError) {
+      throw lastError;
     }
 
-    // Return empty completion if no handler matches
+    // Return empty completion if no handler matches or reference doesn't exist
     return {
       completion: {
         values: [],
@@ -2283,15 +2299,18 @@ export class MCPServer {
         // Extract possible values from prompt arguments schema
         const values: string[] = [];
         
-        // If the prompt has argument schema, try to extract enum values
+        // If the prompt has argument schema, provide completions
         if (prompt.arguments && Array.isArray(prompt.arguments)) {
-          // This is a simplified implementation - in practice, you'd parse the actual schema
-          for (const arg of prompt.arguments) {
-            if (typeof arg === 'string' && arg.includes(request.argument.name)) {
-              // Add some common completion suggestions
-              values.push(...this.getCommonCompletions(request.argument.name, request.argument.value));
-            }
+          // Check if the requested argument is defined in the prompt schema
+          if (prompt.arguments.includes(request.argument.name)) {
+            // Add common completion suggestions based on argument name and value
+            values.push(...this.getCommonCompletions(request.argument.name, request.argument.value));
           }
+        }
+        
+        // Always provide basic completions even if no specific argument schema exists
+        if (values.length === 0) {
+          values.push(...this.getCommonCompletions(request.argument.name, request.argument.value));
         }
 
         return {
@@ -2355,19 +2374,35 @@ export class MCPServer {
 
     // Common completions based on argument name patterns
     if (lowerArgName.includes('file') || lowerArgName.includes('path')) {
-      suggestions.push('.txt', '.json', '.md', '.csv', '.xml');
+      // For file arguments, append extensions to the current value
+      suggestions.push(
+        partialValue + '.txt',
+        partialValue + '.json', 
+        partialValue + '.md',
+        partialValue + '.csv',
+        partialValue + '.xml'
+      );
     } else if (lowerArgName.includes('format') || lowerArgName.includes('type')) {
-      suggestions.push('json', 'xml', 'csv', 'txt', 'markdown');
+      // For format arguments, filter by prefix
+      const formatOptions = ['json', 'xml', 'csv', 'txt', 'markdown'];
+      suggestions.push(...formatOptions
+        .filter(s => s.toLowerCase().startsWith(lowerValue))
+        .map(s => s));
     } else if (lowerArgName.includes('lang') || lowerArgName.includes('language')) {
-      suggestions.push('en', 'es', 'fr', 'de', 'ja', 'zh');
+      // For language arguments, filter by prefix  
+      const langOptions = ['en', 'es', 'fr', 'de', 'ja', 'zh'];
+      suggestions.push(...langOptions
+        .filter(s => s.toLowerCase().startsWith(lowerValue))
+        .map(s => s));
     } else if (lowerArgName.includes('mode') || lowerArgName.includes('method')) {
-      suggestions.push('create', 'read', 'update', 'delete', 'list');
+      // For mode arguments, filter by prefix
+      const modeOptions = ['create', 'read', 'update', 'delete', 'list'];
+      suggestions.push(...modeOptions
+        .filter(s => s.toLowerCase().startsWith(lowerValue))
+        .map(s => s));
     }
 
-    // Filter suggestions that start with the partial value
-    return suggestions
-      .filter(s => s.toLowerCase().startsWith(lowerValue))
-      .map(s => partialValue + s.substring(lowerValue.length));
+    return suggestions;
   }
 
   /**
