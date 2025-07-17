@@ -303,8 +303,8 @@ export class OIDCProvider extends OAuthProvider {
             (errorData as any).error_description ? String((errorData as any).error_description) : undefined,
             (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
-          // Convert OAuth error to regular error for throwing
-          const errorMessage = oauthError.error || 'OAuth error';
+          // Use the original error string directly since createOAuthError might modify it
+          const errorMessage = String(errorData.error || 'server_error');
           throw new Error(errorMessage);
         }
         throw new Error(`Token exchange failed: ${response.statusText}`);
@@ -325,13 +325,10 @@ export class OIDCProvider extends OAuthProvider {
       console.error('Failed to exchange code for tokens:', error);
       if ((error as any).error) {
         // Convert OAuth error to regular Error
-        const errorMessage = (error as any).error || 'OAuth error';
+        const errorMessage = String((error as any).error || 'OAuth error');
         throw new Error(errorMessage);
       }
-      throw createOAuthError(
-        'server_error',
-        error instanceof Error ? error.message : 'Token exchange failed'
-      );
+      throw new Error(error instanceof Error ? error.message : 'Token exchange failed');
     }
   }
 
@@ -492,8 +489,8 @@ export class OIDCProvider extends OAuthProvider {
             (errorData as any).error_description ? String((errorData as any).error_description) : undefined,
             (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
-          // Convert OAuth error to regular error for throwing
-          const errorMessage = oauthError.error || 'OAuth error';
+          // Use the original error string directly since createOAuthError might modify it
+          const errorMessage = String(errorData.error || 'server_error');
           throw new Error(errorMessage);
         }
         throw new Error(`Token refresh failed: ${response.statusText}`);
@@ -514,13 +511,10 @@ export class OIDCProvider extends OAuthProvider {
       console.error('Failed to refresh token:', error);
       if ((error as any).error) {
         // Convert OAuth error to regular Error
-        const errorMessage = (error as any).error || 'OAuth error';
+        const errorMessage = String((error as any).error || 'OAuth error');
         throw new Error(errorMessage);
       }
-      throw createOAuthError(
-        'server_error',
-        error instanceof Error ? error.message : 'Token refresh failed'
-      );
+      throw new Error(error instanceof Error ? error.message : 'Token refresh failed');
     }
   }
 
@@ -686,8 +680,8 @@ export class OIDCProvider extends OAuthProvider {
             (errorData as any).error_description ? String((errorData as any).error_description) : undefined,
             (errorData as any).error_uri ? String((errorData as any).error_uri) : undefined
           );
-          // Convert OAuth error to regular error for throwing
-          const errorMessage = oauthError.error || 'OAuth error';
+          // Use the original error string directly since createOAuthError might modify it
+          const errorMessage = String(errorData.error || 'server_error');
           throw new Error(errorMessage);
         }
         throw new Error(`Client registration failed: ${response.statusText}`);
@@ -699,13 +693,10 @@ export class OIDCProvider extends OAuthProvider {
       console.error('Failed to register client:', error);
       if ((error as any).error) {
         // Convert OAuth error to regular Error
-        const errorMessage = (error as any).error || 'OAuth error';
+        const errorMessage = String((error as any).error || 'OAuth error');
         throw new Error(errorMessage);
       }
-      throw createOAuthError(
-        'server_error',
-        error instanceof Error ? error.message : 'Client registration failed'
-      );
+      throw new Error(error instanceof Error ? error.message : 'Client registration failed');
     }
   }
 

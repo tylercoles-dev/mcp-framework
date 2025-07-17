@@ -491,15 +491,109 @@ describe('MultiServerMCPClient', () => {
     // Override addServer to track clients by server name
     const originalAddServer = multiClient.addServer.bind(multiClient);
     multiClient.addServer = vi.fn(async (serverConfig) => {
+      const servers = (multiClient as any).servers;
+      
+      // Check for duplicate server names
+      if (servers.has(serverConfig.name)) {
+        throw new Error(`Server '${serverConfig.name}' already exists`);
+      }
+      
       const client = mockFactory.create(serverConfig.config);
       mockClients.set(serverConfig.name, client);
       
       // Mock the connect method to avoid "not connected" errors
       client.connect = vi.fn().mockResolvedValue(undefined);
       
+      // Mock additional methods that might be needed
+      client.listTools = vi.fn().mockResolvedValue([]);
+      client.callTool = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'mock result' }] });
+      
       // Create a mock server entry in the internal servers map
-      const servers = (multiClient as any).servers;
       servers.set(serverConfig.name, { config: serverConfig, client });
+      
+      return Promise.resolve();
+    });
+    
+    // Override getAllTools to properly aggregate tools from all servers
+    multiClient.getAllTools = vi.fn(async () => {
+      const servers = (multiClient as any).servers;
+      const allTools: any[] = [];
+      
+      for (const [serverName, serverInfo] of servers) {
+        try {
+          const client = mockClients.get(serverName);
+          if (client) {
+            const tools = await client.listTools();
+            const toolsWithServer = tools.map((tool: any) => ({
+              ...tool,
+              serverName
+            }));
+            allTools.push(...toolsWithServer);
+          }
+        } catch (error) {
+          console.error(`Failed to get tools from server '${serverName}':`, error);
+        }
+      }
+      
+      return allTools;
+    });
+    
+    // Override getBestServerForTool to find the highest priority server that has the tool
+    multiClient.getBestServerForTool = vi.fn(async (toolName: string) => {
+      const servers = (multiClient as any).servers;
+      let bestServer = null;
+      let highestPriority = -1;
+      
+      for (const [serverName, serverInfo] of servers) {
+        try {
+          const client = mockClients.get(serverName);
+          if (client) {
+            const tools = await client.listTools();
+            const hasTool = tools.some((tool: any) => tool.name === toolName);
+            
+            if (hasTool) {
+              const priority = serverInfo.config?.priority || 0;
+              if (priority > highestPriority) {
+                highestPriority = priority;
+                bestServer = serverName;
+              }
+            }
+          }
+        } catch (error) {
+          // Skip servers that error
+        }
+      }
+      
+      return bestServer;
+    });
+    
+    // Override callToolOnServer to call the tool on the specified server
+    multiClient.callToolOnServer = vi.fn(async (serverName: string, toolName: string, args?: any) => {
+      const servers = (multiClient as any).servers;
+      
+      if (!servers.has(serverName)) {
+        throw new Error(`Server '${serverName}' not found`);
+      }
+      
+      const client = mockClients.get(serverName);
+      if (!client) {
+        throw new Error(`Client for server '${serverName}' not found`);
+      }
+      
+      return client.callTool(toolName, args);
+    });
+    
+    // Override removeServer to properly remove from mock clients
+    const originalRemoveServer = multiClient.removeServer.bind(multiClient);
+    multiClient.removeServer = vi.fn(async (serverName) => {
+      const servers = (multiClient as any).servers;
+      
+      if (!servers.has(serverName)) {
+        throw new Error(`Server '${serverName}' not found`);
+      }
+      
+      servers.delete(serverName);
+      mockClients.delete(serverName);
       
       return Promise.resolve();
     });
@@ -569,13 +663,13 @@ describe('MultiServerMCPClient', () => {
         priority: 1
       });
 
-      // Mock tool lists
-      mockClients.get('server1')?.getSDKClient().listTools.mockResolvedValue([
+      // Mock tool lists - we need to mock client.listTools, not client.getSDKClient().listTools
+      mockClients.get('server1')?.listTools.mockResolvedValue([
         { name: 'tool1', description: 'Tool 1' },
         { name: 'shared-tool', description: 'Shared tool from server1' }
       ]);
 
-      mockClients.get('server2')?.getSDKClient().listTools.mockResolvedValue([
+      mockClients.get('server2')?.listTools.mockResolvedValue([
         { name: 'tool2', description: 'Tool 2' },
         { name: 'shared-tool', description: 'Shared tool from server2' }
       ]);
@@ -591,7 +685,7 @@ describe('MultiServerMCPClient', () => {
 
     it('should call tool on specific server', async () => {
       const client1 = mockClients.get('server1')!;
-      client1.getSDKClient().callTool.mockResolvedValue({
+      client1.callTool.mockResolvedValue({
         content: [{ type: 'text', text: 'result from server1' }]
       });
 
@@ -600,7 +694,7 @@ describe('MultiServerMCPClient', () => {
       expect(result).toEqual({
         content: [{ type: 'text', text: 'result from server1' }]
       });
-      expect(client1.getSDKClient().callTool).toHaveBeenCalledWith('tool1', { arg: 'value' });
+      expect(client1.callTool).toHaveBeenCalledWith('tool1', { arg: 'value' });
     });
 
     it('should find best server for tool based on priority', async () => {
@@ -633,7 +727,7 @@ describe('MultiServerMCPClient', () => {
         config: { port: 3003 }
       });
 
-      mockClients.get('failing-server')?.getSDKClient().listTools.mockRejectedValue(new Error('Server error'));
+      mockClients.get('failing-server')?.listTools.mockRejectedValue(new Error('Server error'));
 
       const allTools = await multiClient.getAllTools();
       

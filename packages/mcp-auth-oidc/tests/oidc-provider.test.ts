@@ -242,8 +242,13 @@ describe('OIDCProvider', () => {
           error_description: 'Invalid authorization code',
         });
       
-      await expect(provider.handleCallback('bad-code'))
-        .rejects.toThrow(new Error('invalid_grant'));
+      try {
+        await provider.handleCallback('bad-code');
+        expect.fail('Expected to throw an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toBe('invalid_grant');
+      }
     });
 
     it('should include PKCE code verifier', async () => {
@@ -474,10 +479,16 @@ describe('OIDCProvider', () => {
           error_description: 'Invalid redirect URI',
         });
       
-      await expect(provider.registerClient({
-        client_name: 'Test',
-        redirect_uris: ['invalid'],
-      })).rejects.toThrow(new Error('invalid_client_metadata'));
+      try {
+        await provider.registerClient({
+          client_name: 'Test',
+          redirect_uris: ['invalid'],
+        });
+        expect.fail('Expected to throw an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toBe('invalid_client_metadata');
+      }
     });
   });
 
