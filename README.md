@@ -1,33 +1,16 @@
-# @tylercoles/mcp-framework
+# MCP Framework
 
-A modular framework for building Model Context Protocol (MCP) servers with pluggable transports and authentication providers.
+A modular TypeScript framework for building Model Context Protocol (MCP) servers with pluggable transports and authentication providers.
 
-## Overview
+## Features
 
-This framework extracts the core MCP server infrastructure into reusable packages, allowing developers to:
-
-1. **Implement only their specific tools/features** - Focus on your domain logic
-2. **Choose transport type** - stdio for local development, HTTP for production
-3. **Configure auth providers** - Built-in support for OAuth providers like Authentik
-4. **Automatic OAuth handling** - Framework manages discovery endpoints, client registration, and auth flows
-
-## Packages
-
-### Core Packages
-
-- **[@tylercoles/mcp-server](./packages/mcp-server)** - Core MCP server framework with plugin architecture
-- **[@tylercoles/mcp-auth](./packages/mcp-auth)** - Authentication abstractions and base implementations
-
-### Transport Packages
-
-- **[@tylercoles/mcp-transport-stdio](./packages/mcp-transport-stdio)** - stdio transport for local/CLI usage
-- **[@tylercoles/mcp-transport-http](./packages/mcp-transport-http)** - HTTP transport with session management
-- **[@tylercoles/mcp-transport-sse](./packages/mcp-transport-sse)** - SSE (Server-Sent Events) transport for backwards compatibility
-
-### Auth Provider Packages
-
-- **[@tylercoles/mcp-auth-authentik](./packages/mcp-auth-authentik)** - Authentik OAuth provider
-- **@tylercoles/mcp-auth-auth0** (coming soon) - Auth0 provider
+- **Transport Independence**: Run the same MCP server on multiple transports (stdio, HTTP, WebSocket, SSE)
+- **Plugin Architecture**: Modular design with pluggable authentication providers
+- **OAuth 2.1 Compliance**: Built-in support for OAuth 2.1 with PKCE and dynamic client registration
+- **Multi-Transport Support**: Single server instance can run multiple transports simultaneously
+- **Context Injection**: Rich context system for user info and request metadata
+- **Type Safety**: Full TypeScript support with comprehensive type definitions
+- **Testing Ready**: Comprehensive test coverage with Vitest
 
 ## Quick Start
 
@@ -37,223 +20,248 @@ This framework extracts the core MCP server infrastructure into reusable package
 npm install @tylercoles/mcp-server @tylercoles/mcp-transport-stdio
 ```
 
-### Basic Example
+### Basic Usage
 
 ```typescript
-import { MCPServer, z } from '@tylercoles/mcp-server';
+import { MCPServer } from '@tylercoles/mcp-server';
 import { StdioTransport } from '@tylercoles/mcp-transport-stdio';
 
-// Create server
 const server = new MCPServer({
-  name: 'my-server',
+  name: 'my-mcp-server',
   version: '1.0.0'
 });
 
-// Register a tool
-server.registerTool(
-  'greet',
-  {
-    description: 'Greet someone',
-    inputSchema: { name: z.string() }
-  },
-  async ({ name }) => ({
-    content: [{ type: 'text', text: `Hello, ${name}!` }]
-  })
-);
+// Add a simple tool
+server.addTool({
+  name: 'echo',
+  description: 'Echo back the input',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      message: { type: 'string' }
+    }
+  }
+}, async (params) => {
+  return { text: params.message };
+});
 
 // Use stdio transport
 server.useTransport(new StdioTransport());
 
-// Start server
+// Start the server
 await server.start();
 ```
 
-### Multiple Transports
-
-Run a single server accessible via multiple transports:
+### HTTP Transport with Authentication
 
 ```typescript
 import { MCPServer } from '@tylercoles/mcp-server';
 import { HttpTransport } from '@tylercoles/mcp-transport-http';
+import { AuthentikProvider } from '@tylercoles/mcp-auth-authentik';
+
+const server = new MCPServer({
+  name: 'my-http-server',
+  version: '1.0.0'
+});
+
+// Configure HTTP transport with OAuth
+const httpTransport = new HttpTransport({
+  port: 3000,
+  auth: new AuthentikProvider({
+    issuer: 'https://auth.example.com',
+    clientId: 'your-client-id',
+    clientSecret: 'your-client-secret'
+  })
+});
+
+server.useTransport(httpTransport);
+await server.start();
+```
+
+### Multi-Transport Server
+
+```typescript
+import { MCPServer } from '@tylercoles/mcp-server';
 import { StdioTransport } from '@tylercoles/mcp-transport-stdio';
+import { HttpTransport } from '@tylercoles/mcp-transport-http';
 
 const server = new MCPServer({
   name: 'multi-transport-server',
   version: '1.0.0'
 });
 
-// Register your tools once
-server.registerTool('my-tool', config, handler);
+// Add your tools once
+server.addTool(/* ... */);
 
-// Add multiple transports
-server.useTransports(
-  new HttpTransport({ port: 3000 }),
-  new StdioTransport()
-);
-
-// Or add them individually
-// server.useTransport(new HttpTransport({ port: 3000 }));
-// server.useTransport(new StdioTransport());
+// Run on multiple transports
+server.useTransports([
+  new StdioTransport(),
+  new HttpTransport({ port: 3000 })
+]);
 
 await server.start();
 ```
 
-### HTTP with Authentication
+## Architecture
 
-```typescript
-import { MCPServer } from '@tylercoles/mcp-server';
-import { HttpTransport } from '@tylercoles/mcp-transport-http';
-import { AuthentikAuth } from '@tylercoles/mcp-auth-authentik';
+### Core Components
 
-const server = new MCPServer({
-  name: 'secure-server',
-  version: '1.0.0'
-});
+- **`@tylercoles/mcp-server`**: Core framework with plugin architecture
+- **`@tylercoles/mcp-auth`**: Authentication abstractions and base implementations
+- **`@tylercoles/mcp-transport-stdio`**: stdio transport for local/CLI usage
+- **`@tylercoles/mcp-transport-http`**: HTTP transport with session management
+- **`@tylercoles/mcp-transport-sse`**: SSE transport for backwards compatibility
+- **`@tylercoles/mcp-transport-websocket`**: WebSocket transport for real-time communication
+- **`@tylercoles/mcp-auth-authentik`**: Authentik OAuth provider implementation
+- **`@tylercoles/mcp-auth-oidc`**: Generic OIDC authentication provider
+- **`@tylercoles/mcp-client`**: Enhanced MCP client with advanced features
+- **`@tylercoles/mcp-rate-limit`**: Rate limiting middleware
 
-// Configure HTTP transport with auth
-const transport = new HttpTransport({
-  port: 3000,
-  auth: new AuthentikAuth({
-    url: 'https://auth.example.com',
-    clientId: 'my-app'
-  })
-});
+### Package Structure
 
-server.useTransport(transport);
-await server.start();
+```
+packages/
+├── mcp-server/              # Core framework
+├── mcp-auth/               # Authentication abstractions
+├── mcp-auth-authentik/     # Authentik OAuth provider
+├── mcp-auth-oidc/          # Generic OIDC provider
+├── mcp-transport-stdio/    # stdio transport
+├── mcp-transport-http/     # HTTP transport
+├── mcp-transport-sse/      # SSE transport
+├── mcp-transport-websocket/ # WebSocket transport
+├── mcp-client/             # Enhanced MCP client
+├── mcp-client-http/        # HTTP client implementation
+├── mcp-client-stdio/       # stdio client implementation
+└── mcp-rate-limit/         # Rate limiting middleware
 ```
 
-### Custom Routes with Authentication
+## Available Transports
 
-The HTTP transport supports easy router registration with built-in auth:
+| Transport | Use Case | Features |
+|-----------|----------|----------|
+| **stdio** | Local CLI usage, development | Process communication via stdin/stdout |
+| **HTTP** | Production web usage | REST API, session management, OAuth |
+| **WebSocket** | Real-time applications | Full-duplex communication |
+| **SSE** | Backwards compatibility | Server-sent events |
 
-```typescript
-// Create a public router (no auth)
-const publicRouter = transport.createRouter(false);
-publicRouter.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
-transport.registerRouter('/public', publicRouter);
+## Authentication Providers
 
-// Create a protected router (auth required)
-const apiRouter = transport.createRouter(true);
-apiRouter.get('/data', (req, res) => {
-  const user = transport.getAuthenticatedUser(req);
-  res.json({ user: user?.username, data: [...] });
-});
-transport.registerRouter('/api', apiRouter);
-```
-
-### Server Introspection
-
-Query server capabilities at runtime:
-
-```typescript
-// Get all registered tools
-const tools = server.getTools();
-tools.forEach(tool => {
-  console.log(`Tool: ${tool.name} - ${tool.description}`);
-});
-
-// Get specific tool info
-const tool = server.getTool('my-tool');
-
-// Get all capabilities
-const capabilities = server.getCapabilities();
-console.log(`Tools: ${capabilities.tools.length}`);
-console.log(`Resources: ${capabilities.resources.length}`);
-console.log(`Prompts: ${capabilities.prompts.length}`);
-
-// Also available: getResources(), getResource(), getPrompts(), getPrompt()
-```
+| Provider | Description | Features |
+|----------|-------------|----------|
+| **Authentik** | Authentik OAuth integration | OAuth 2.1, PKCE, dynamic client registration |
+| **OIDC** | Generic OpenID Connect | Standards-compliant OIDC implementation |
 
 ## Examples
 
-- [Echo Server](./examples/echo-server) - Simple server demonstrating basic features
-- [Multi-Transport Server](./examples/multi-transport-server) - Server with both HTTP and stdio transports
-- [Memory Server](./examples/memory-server) - Full-featured server with NATS persistence
-- More examples coming soon...
+Comprehensive examples are available in the `examples/` directory:
+
+- **echo-server**: Basic MCP server with multiple transport examples
+- **multi-transport-server**: Server running on multiple transports simultaneously
+- **kanban-board**: Full-featured kanban board with Docker support
+- **memory-server**: Distributed memory server with NATS integration
+- **file-server**: File operations MCP server
+- **ide-server**: IDE integration examples
 
 ## Development
 
-This project uses **npm workspaces** for monorepo management. To work on the packages:
+### Prerequisites
+
+- Node.js 18+
+- npm 9+
+
+### Setup
 
 ```bash
-# Install dependencies (npm 7+ required)
+# Clone the repository
+git clone https://github.com/tylercoles-dev/mcp-framework.git
+cd mcp-framework
+
+# Install dependencies
 npm install
 
 # Build all packages
 npm run build
 
 # Run tests
-npm run test
+npm test
 
-# Watch mode for development
+# Run in development mode
 npm run dev
-
-# Verify workspace setup
-npm run verify
 ```
 
-### Working with Workspaces
+### Common Commands
 
 ```bash
-# Run command in specific package
-npm run build -w @tylercoles/mcp-server
+# Build all packages
+npm run build
 
+# Build in dependency order (if build fails)
+npm run build:order
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests with UI
+npm run test:ui
+
+# Type checking
+npm run typecheck
+
+# Lint all packages
+npm run lint
+
+# Clean build artifacts
+npm run clean
+```
+
+### Working with Packages
+
+```bash
 # Install dependency in specific package
 npm install express -w @tylercoles/mcp-transport-http
 
-# Run all workspace commands
-npm run build --workspaces
+# Build specific package
+npm run build -w @tylercoles/mcp-server
+
+# Test specific package
+npm test -w @tylercoles/mcp-server
+
+# Run specific package in dev mode
+npm run dev -w @tylercoles/mcp-server
 ```
 
-See [Workspace Guide](./docs/workspace-guide.md) for detailed information.
+## Security
 
-## Architecture
+This framework implements security best practices including:
 
-The framework follows a plugin architecture:
+- OAuth 2.1 with PKCE for secure authentication
+- Dynamic client registration
+- Session management with secure cookies
+- CORS protection
+- Rate limiting
+- Input validation with Zod schemas
+- Helmet.js security headers
 
-```
-┌─────────────────┐
-│   MCP Server    │  Core framework
-├─────────────────┤
-│    Transport    │  Pluggable (stdio, HTTP, etc.)
-├─────────────────┤
-│      Auth       │  Optional auth providers
-├─────────────────┤
-│   Your Tools    │  Domain-specific implementation
-└─────────────────┘
-```
-
-### Key Concepts
-
-- **Transport Independence**: Write your tools once, run with any transport
-- **Multi-Transport Support**: Run multiple transports simultaneously on one server
-- **Context Injection**: Access user info and request metadata in tool handlers
-- **Type Safety**: Full TypeScript support with Zod schema validation
-- **Extensibility**: Easy to add new transports and auth providers
-- **Introspection**: Query server capabilities at runtime
-
-## Migration from Standalone Servers
-
-If you have an existing MCP server, migration is straightforward:
-
-1. Replace direct SDK usage with `MCPServer` class
-2. Move transport setup to use transport packages
-3. Add authentication if needed
-
-See the [migration guide](./docs/MIGRATION_STRATEGY.md) for detailed steps.
+See [SECURITY.md](SECURITY.md) for detailed security information.
 
 ## Contributing
 
-Contributions are welcome! Please see our [contributing guidelines](./CONTRIBUTING.md).
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT © Tyler Coles
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## Related
+## Support
 
-- [Model Context Protocol](https://modelcontextprotocol.io)
-- [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
+- GitHub Issues: [Report bugs and request features](https://github.com/tylercoles-dev/mcp-framework/issues)
+- Documentation: [Full documentation](docs/)
+- Examples: [Example implementations](examples/)
+
+## Roadmap
+
+- [ ] Additional transport implementations (gRPC, TCP)
+- [ ] More authentication providers (Auth0, Firebase Auth)
+- [ ] Plugin marketplace
+- [ ] Performance optimizations
+- [ ] Enhanced monitoring and metrics

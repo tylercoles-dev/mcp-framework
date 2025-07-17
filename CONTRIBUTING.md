@@ -1,379 +1,495 @@
 # Contributing to MCP Framework
 
-Thank you for your interest in contributing to the MCP Framework! This document provides guidelines and instructions for contributing.
-
-## Table of Contents
-
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
-- [How to Contribute](#how-to-contribute)
-- [Pull Request Process](#pull-request-process)
-- [Coding Standards](#coding-standards)
-- [Testing Guidelines](#testing-guidelines)
-- [Documentation](#documentation)
-- [Release Process](#release-process)
+Thank you for your interest in contributing to the MCP Framework! This document provides guidelines and information for contributors.
 
 ## Code of Conduct
 
-This project adheres to the Contributor Covenant [code of conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to the maintainers.
+By participating in this project, you agree to abide by our Code of Conduct. Please treat all contributors and users with respect.
 
 ## Getting Started
-
-1. Fork the repository on GitHub
-2. Clone your fork locally
-3. Create a new branch for your feature or fix
-4. Make your changes
-5. Push to your fork and submit a pull request
-
-## Development Setup
 
 ### Prerequisites
 
 - Node.js 18 or higher
-- npm 7 or higher (for workspace support)
+- npm 9 or higher
 - Git
 
-### Initial Setup
+### Development Setup
+
+1. **Fork and clone the repository**
+   ```bash
+   git clone https://github.com/your-username/mcp-framework.git
+   cd mcp-framework
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Build all packages**
+   ```bash
+   npm run build
+   ```
+
+4. **Run tests to ensure everything works**
+   ```bash
+   npm test
+   ```
+
+5. **Start development mode**
+   ```bash
+   npm run dev
+   ```
+
+## Development Workflow
+
+### Project Structure
+
+```
+mcp-framework/
+├── packages/           # Core packages
+├── examples/           # Example implementations
+├── docs/              # Documentation
+├── tools/             # Build and development tools
+├── spec/              # MCP specification
+└── tests/             # Integration tests
+```
+
+### npm Workspaces
+
+This project uses npm workspaces for managing multiple packages:
 
 ```bash
-# Clone your fork
-git clone https://github.com/YOUR_USERNAME/mcp-framework.git
-cd mcp-framework
+# Install dependency in specific package
+npm install express -w @tylercoles/mcp-transport-http
 
-# Add upstream remote
-git remote add upstream https://github.com/tylercoles-dev/mcp-framework
+# Build specific package
+npm run build -w @tylercoles/mcp-server
 
-# Install dependencies
-npm install
+# Test specific package
+npm test -w @tylercoles/mcp-server
 
+# Run specific package in dev mode
+npm run dev -w @tylercoles/mcp-server
+```
+
+### Common Commands
+
+```bash
 # Build all packages
 npm run build
 
-# Run tests to ensure everything works
+# Build in dependency order (if build fails)
+npm run build:order
+
+# Run all tests
 npm test
 
-# Verify workspace setup
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests with UI
+npm run test:ui
+
+# Type checking
+npm run typecheck
+
+# Lint all packages
+npm run lint
+
+# Clean build artifacts
+npm run clean
+
+# Verify workspace configuration
 npm run verify
+
+# Security audit
+npm run security:audit
 ```
 
-### Development Workflow
+## Making Changes
 
-```bash
-# Create a new branch
-git checkout -b feature/my-feature
+### Before You Start
 
-# Make changes and test
-npm run dev          # Watch mode for all packages
-npm test            # Run all tests
-npm run lint        # Check code style
+1. **Check existing issues** to see if your feature/bug is already being worked on
+2. **Create an issue** to discuss your proposed changes
+3. **Get feedback** from maintainers before starting significant work
 
-# Test specific package
-npm run test -w @tylercoles/mcp-server
+### Branch Naming
 
-# Build specific package
-npm run build -w @tylercoles/mcp-auth
-```
+Use descriptive branch names:
+- `feature/add-grpc-transport`
+- `fix/oauth-token-refresh`
+- `docs/update-getting-started`
+- `refactor/simplify-auth-interface`
 
-## How to Contribute
+### Development Process
 
-### Reporting Bugs
-
-Before creating bug reports, please check existing issues. When creating a bug report, include:
-
-- A clear and descriptive title
-- Steps to reproduce the issue
-- Expected behavior
-- Actual behavior
-- System information (OS, Node.js version, npm version)
-- Relevant logs or error messages
-
-### Suggesting Features
-
-Feature requests are welcome! Please provide:
-
-- A clear and descriptive title
-- Detailed description of the proposed feature
-- Use cases and examples
-- Any potential implementation ideas
-
-### Submitting Changes
-
-1. **Small Changes**: For small changes (typos, minor fixes), you can submit a PR directly.
-
-2. **Large Changes**: For significant changes, please open an issue first to discuss the approach.
-
-3. **New Features**: Always discuss new features in an issue before implementation.
-
-## Pull Request Process
-
-### Before Submitting
-
-1. **Update from upstream**
+1. **Create a feature branch**
    ```bash
-   git fetch upstream
-   git rebase upstream/main
+   git checkout -b feature/your-feature-name
    ```
 
-2. **Run all checks**
+2. **Make your changes**
+   - Follow the existing code style
+   - Add tests for new functionality
+   - Update documentation as needed
+
+3. **Test your changes**
    ```bash
-   npm run build
    npm test
-   npm run lint
    npm run typecheck
-   npm run security:audit
+   npm run lint
    ```
 
-3. **Update documentation**
-   - Update README.md if needed
-   - Add JSDoc comments for new functions
-   - Update CHANGELOG.md
+4. **Commit your changes**
+   ```bash
+   git add .
+   git commit -m "feat: add new feature description"
+   ```
 
-4. **Write tests**
-   - All new features must have tests
-   - Maintain or improve code coverage
-   - Run `npm run test:coverage`
+5. **Push and create a pull request**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
 
-### PR Guidelines
+## Code Style
 
-- **Title**: Use conventional commit format (e.g., `feat: add new transport`, `fix: handle connection errors`)
-- **Description**: Clearly describe what changes you made and why
-- **Breaking Changes**: Clearly mark any breaking changes
-- **Issues**: Reference any related issues (e.g., "Fixes #123")
-
-### Review Process
-
-1. At least one maintainer must review the PR
-2. All CI checks must pass
-3. Code coverage must not decrease significantly
-4. No merge conflicts
-
-## Coding Standards
-
-### TypeScript
+### TypeScript Guidelines
 
 - Use TypeScript for all new code
-- Enable strict mode
-- Provide type definitions for all exports
-- Avoid `any` types
+- Prefer interfaces over types for object shapes
+- Use proper type annotations
+- Avoid `any` type - use proper typing
 
-### Code Style
-
-- Use 2 spaces for indentation
-- Use semicolons
-- Use single quotes for strings
-- Maximum line length: 100 characters
-
-Example:
 ```typescript
-export class MyClass {
-  private config: Config;
+// ✅ Good
+interface ToolConfig {
+  name: string;
+  description: string;
+  inputSchema: JSONSchema;
+}
 
-  constructor(config: Config) {
-    this.config = config;
+// ❌ Bad  
+const toolConfig: any = {
+  name: 'example',
+  description: 'Example tool'
+};
+```
+
+### Code Organization
+
+- Keep functions small and focused
+- Use descriptive variable and function names
+- Group related functionality together
+- Export only what's needed
+
+```typescript
+// ✅ Good
+export class HttpTransport implements Transport {
+  private server: Server;
+  private authProvider?: AuthProvider;
+
+  constructor(config: HttpTransportConfig) {
+    this.validateConfig(config);
+    this.server = this.createServer(config);
   }
 
-  async process(data: string): Promise<Result> {
-    // Implementation
+  private validateConfig(config: HttpTransportConfig): void {
+    // Validation logic
+  }
+
+  private createServer(config: HttpTransportConfig): Server {
+    // Server creation logic
   }
 }
 ```
-
-### Naming Conventions
-
-- **Classes**: PascalCase (e.g., `McpServer`)
-- **Interfaces**: PascalCase with 'I' prefix optional (e.g., `Transport` or `ITransport`)
-- **Functions**: camelCase (e.g., `registerTool`)
-- **Constants**: UPPER_SNAKE_CASE (e.g., `MAX_RETRIES`)
-- **Files**: kebab-case (e.g., `http-transport.ts`)
 
 ### Error Handling
 
-- Always handle errors appropriately
+- Use proper error types
 - Provide meaningful error messages
-- Use custom error classes when appropriate
-- Log errors with context
+- Don't expose internal implementation details
 
 ```typescript
-try {
-  await someOperation();
-} catch (error) {
-  logger.error('Operation failed', { 
-    error, 
-    context: { userId, operation: 'someOperation' }
-  });
-  throw new OperationError('Failed to complete operation', { cause: error });
+// ✅ Good
+if (!user.hasPermission('admin')) {
+  throw new AuthenticationError('Insufficient permissions');
+}
+
+// ❌ Bad
+if (!user.hasPermission('admin')) {
+  throw new Error('Database query failed: SELECT * FROM users WHERE...');
 }
 ```
 
-## Testing Guidelines
+## Testing
 
 ### Test Structure
 
-- Place tests in `tests/` directory within each package
-- Name test files with `.test.ts` suffix
-- Group related tests using `describe` blocks
-
-### Test Requirements
-
-- Write unit tests for all new code
-- Aim for >80% code coverage
+- Tests are located in `tests/` directories within each package
+- Use Vitest for testing
+- Aim for 80%+ code coverage
 - Test both success and error cases
-- Mock external dependencies
 
-Example:
+### Test Naming
+
 ```typescript
-describe('MyClass', () => {
-  let instance: MyClass;
-
-  beforeEach(() => {
-    instance = new MyClass({ /* config */ });
-  });
-
-  describe('process', () => {
-    it('should process valid data', async () => {
-      const result = await instance.process('valid-data');
-      expect(result).toEqual({ /* expected */ });
+// ✅ Good
+describe('HttpTransport', () => {
+  describe('constructor', () => {
+    it('should create server with valid config', () => {
+      // Test implementation
     });
 
-    it('should throw on invalid data', async () => {
-      await expect(instance.process('')).rejects.toThrow('Invalid data');
+    it('should throw error with invalid config', () => {
+      // Test implementation
     });
   });
 });
 ```
 
+### Test Types
+
+1. **Unit Tests**: Test individual functions/classes
+2. **Integration Tests**: Test component interactions
+3. **End-to-End Tests**: Test full workflows
+
 ### Running Tests
 
 ```bash
-# All tests
+# Run all tests
 npm test
 
-# With coverage
-npm run test:coverage
+# Run specific package tests
+npm test -w @tylercoles/mcp-server
 
-# Watch mode
+# Run tests in watch mode (in package directory)
 npm run test:watch
 
-# Specific package
-npm test -w @tylercoles/mcp-server
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests with UI
+npm run test:ui
 ```
 
 ## Documentation
 
 ### Code Documentation
 
-- Add JSDoc comments for all public APIs
-- Include examples in comments
-- Document parameters and return types
+- Use JSDoc comments for public APIs
+- Include examples where helpful
+- Document complex logic
 
 ```typescript
 /**
- * Register a tool with the MCP server
- * 
- * @param name - Unique tool identifier
- * @param config - Tool configuration
- * @param handler - Tool implementation
- * 
+ * Creates a new MCP server instance
+ * @param config - Server configuration
+ * @returns Configured MCPServer instance
  * @example
  * ```typescript
- * server.registerTool('echo', {
- *   description: 'Echo input',
- *   inputSchema: { message: z.string() }
- * }, async ({ message }) => ({
- *   content: [{ type: 'text', text: message }]
- * }));
+ * const server = new MCPServer({
+ *   name: 'my-server',
+ *   version: '1.0.0'
+ * });
  * ```
  */
-registerTool(name: string, config: ToolConfig, handler: ToolHandler): void
+export class MCPServer {
+  constructor(config: MCPServerConfig) {
+    // Implementation
+  }
+}
 ```
 
 ### README Updates
 
-- Update package README when adding features
+- Update package READMEs when adding features
 - Include usage examples
-- Document breaking changes
+- Update main README for architectural changes
 
-### API Documentation
+### Documentation Files
 
-- Keep API documentation up to date
-- Document all configuration options
-- Provide migration guides for breaking changes
+- Create documentation in `docs/` folder
+- Use Markdown format
+- Include code examples
+- Keep documentation up-to-date
 
-## Workspace Management
+## Submitting Changes
 
-This project uses npm workspaces. Key commands:
+### Pull Request Process
 
-```bash
-# Add dependency to specific package
-npm install express -w @tylercoles/mcp-transport-http
+1. **Ensure tests pass**
+   ```bash
+   npm test
+   npm run typecheck
+   npm run lint
+   ```
 
-# Add dev dependency
-npm install -D @types/express -w @tylercoles/mcp-transport-http
+2. **Update documentation** if needed
 
-# Run script in specific package
-npm run build -w @tylercoles/mcp-server
+3. **Create a pull request** with:
+   - Clear description of changes
+   - Link to related issues
+   - Testing instructions
+   - Breaking change notes (if any)
 
-# Run script in all packages
-npm run build --workspaces
+### Pull Request Template
+
+```markdown
+## Description
+Brief description of changes
+
+## Related Issues
+Closes #123
+
+## Type of Change
+- [ ] Bug fix (non-breaking change)
+- [ ] New feature (non-breaking change)
+- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] Documentation update
+
+## Testing
+- [ ] Tests pass locally
+- [ ] New tests added for new functionality
+- [ ] Manual testing completed
+
+## Checklist
+- [ ] Code follows project style guidelines
+- [ ] Self-review completed
+- [ ] Documentation updated
+- [ ] Tests added/updated
 ```
 
-## Commit Messages
+### Review Process
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
+1. **Automated checks** must pass (CI/CD)
+2. **Code review** by maintainers
+3. **Testing** in different environments
+4. **Documentation review** if applicable
+5. **Final approval** and merge
 
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation only
-- `style:` Code style changes (formatting, etc)
-- `refactor:` Code change that neither fixes a bug nor adds a feature
-- `perf:` Performance improvement
-- `test:` Adding or updating tests
-- `chore:` Maintenance tasks
+## Adding New Packages
 
-Examples:
+### Package Structure
+
 ```
-feat: add WebSocket transport support
-fix: handle connection timeout in HTTP transport
-docs: update README with new examples
-test: add unit tests for auth providers
+packages/new-package/
+├── src/
+│   └── index.ts
+├── tests/
+│   └── index.test.ts
+├── package.json
+├── tsconfig.json
+├── vitest.config.ts
+└── README.md
 ```
+
+### Package Configuration
+
+1. **package.json**
+   ```json
+   {
+     "name": "@tylercoles/mcp-new-package",
+     "version": "0.2.0",
+     "main": "dist/index.js",
+     "types": "dist/index.d.ts",
+     "scripts": {
+       "build": "tsc",
+       "test": "vitest",
+       "dev": "tsc --watch"
+     }
+   }
+   ```
+
+2. **tsconfig.json**
+   ```json
+   {
+     "extends": "../../tsconfig.json",
+     "compilerOptions": {
+       "outDir": "dist",
+       "rootDir": "src"
+     },
+     "include": ["src/**/*"],
+     "exclude": ["dist", "tests"]
+   }
+   ```
+
+3. **vitest.config.ts**
+   ```typescript
+   import { defineConfig } from 'vitest/config';
+
+   export default defineConfig({
+     test: {
+       environment: 'node',
+       coverage: {
+         reporter: ['text', 'json', 'html'],
+         threshold: {
+           branches: 80,
+           functions: 80,
+           lines: 80,
+           statements: 80
+         }
+       }
+     }
+   });
+   ```
 
 ## Release Process
 
-### Version Bumping
+### Version Management
 
-The project uses independent versioning for packages:
+- We use semantic versioning (semver)
+- All packages are released together
+- Version bumps are coordinated across packages
 
-```bash
-# Interactive publishing tool
-npm run publish:packages
+### Release Types
 
-# Manual version bump
-npm version patch -w @tylercoles/mcp-server
-npm version minor -w @tylercoles/mcp-auth
-```
+- **Patch** (0.2.1): Bug fixes
+- **Minor** (0.3.0): New features, backwards compatible
+- **Major** (1.0.0): Breaking changes
 
-### Publishing Checklist
+### Pre-release Checklist
 
-1. [ ] All tests pass
-2. [ ] Documentation updated
-3. [ ] CHANGELOG.md updated
-4. [ ] Security audit clean
-5. [ ] Version bumped appropriately
-6. [ ] PR approved and merged
+- [ ] All tests pass
+- [ ] Documentation updated
+- [ ] CHANGELOG.md updated
+- [ ] Version numbers updated
+- [ ] Security audit passed
+- [ ] Breaking changes documented
 
-## Getting Help
+## Support
 
-- **Discord**: Join our community (link coming soon)
-- **Issues**: Check existing issues or create new ones
-- **Discussions**: Use GitHub Discussions for questions
+### Getting Help
+
+- **GitHub Issues**: Bug reports and feature requests
+- **GitHub Discussions**: Questions and community discussion
+- **Documentation**: Check `docs/` folder and package READMEs
+
+### Reporting Issues
+
+When reporting bugs, please include:
+- Operating system and version
+- Node.js version
+- Framework version
+- Steps to reproduce
+- Expected vs actual behavior
+- Code samples (if applicable)
+
+### Feature Requests
+
+When requesting features:
+- Check existing issues first
+- Describe the use case
+- Explain why it's needed
+- Provide examples if possible
 
 ## Recognition
 
-Contributors will be recognized in:
-- CHANGELOG.md for significant contributions
+Contributors are recognized in:
+- `CONTRIBUTORS.md` file
+- Release notes
 - GitHub contributors page
-- Special mentions for major features
 
-Thank you for contributing to MCP Framework! 🎉
+Thank you for contributing to the MCP Framework!

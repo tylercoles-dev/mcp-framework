@@ -1,197 +1,275 @@
-# Security Guidelines
+# Security Policy
 
-## Overview
+## Supported Versions
 
-This document outlines security best practices for the MCP Framework.
+We provide security updates for the following versions:
 
-## Sensitive Information
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.2.x   | :white_check_mark: |
+| 0.1.x   | :x:                |
 
-### What NOT to Commit
+## Reporting Security Vulnerabilities
 
-Never commit the following to the repository:
+If you discover a security vulnerability, please report it responsibly:
 
-- **Environment files** (`.env`, `.env.local`, etc.)
-- **Private keys** or certificates
-- **API keys** and secrets
-- **Database credentials**
-- **OAuth client secrets**
-- **Personal access tokens**
-- **Production URLs** with embedded credentials
+1. **Do NOT** create a public issue
+2. Email security reports to: [security@tylercoles.dev](mailto:security@tylercoles.dev)
+3. Include:
+   - Description of the vulnerability
+   - Steps to reproduce
+   - Affected versions
+   - Any potential impact assessment
 
-### Environment Variables
+We will respond within 48 hours and work with you to resolve the issue.
 
-All sensitive configuration should use environment variables:
+## Security Features
 
-```bash
-# Good - using environment variables
-AUTHENTIK_CLIENT_SECRET=your-secret-here
+### Authentication & Authorization
 
-# Bad - hardcoding secrets
-const clientSecret = "actual-secret-value";
-```
+#### OAuth 2.1 Compliance
+- **PKCE (Proof Key for Code Exchange)**: Required for all OAuth flows
+- **Dynamic Client Registration**: Secure client registration with proper validation
+- **Secure Token Storage**: Tokens are stored securely with appropriate expiration
+- **State Parameter**: CSRF protection in OAuth flows
 
-### Example Files
+#### Session Management
+- **Secure Cookies**: HttpOnly, Secure, SameSite attributes
+- **Session Rotation**: Automatic session ID rotation
+- **Configurable Expiration**: Customizable session timeouts
+- **Cross-Site Protection**: CSRF token validation
 
-Always provide `.env.example` files with placeholder values:
+### Transport Security
 
-```bash
-# .env.example
-SESSION_SECRET=your-session-secret-here-minimum-32-chars
-AUTHENTIK_CLIENT_SECRET=your-client-secret
-```
+#### HTTP Transport
+- **HTTPS Enforcement**: Production deployments should use HTTPS
+- **Security Headers**: Helmet.js integration for security headers
+- **CORS Protection**: Configurable CORS policies
+- **Rate Limiting**: Built-in rate limiting to prevent abuse
 
-## Authentication & Authorization
+#### WebSocket Transport
+- **WSS Support**: WebSocket Secure (WSS) for encrypted connections
+- **Origin Validation**: Configurable origin checking
+- **Connection Limits**: Configurable connection limits per client
 
-### OAuth Configuration
+### Input Validation
 
-1. **Client Secrets**: Always use environment variables
-2. **Redirect URIs**: Use configurable base URLs
-3. **Allowed Groups**: Implement proper access control
-4. **Token Storage**: Never log or expose tokens
+#### Zod Schemas
+- **Strict Validation**: All inputs validated against Zod schemas
+- **Type Safety**: Runtime type checking for all parameters
+- **Sanitization**: Automatic sanitization of user inputs
 
-### Session Security
+#### Request Validation
+- **Content-Type Validation**: Strict content-type checking
+- **Size Limits**: Configurable request size limits
+- **Encoding Validation**: Proper encoding validation
 
-- Use strong session secrets (32+ characters)
-- Enable HTTPS in production
-- Set secure cookie flags
-- Implement CSRF protection
+### Error Handling
 
-## Transport Security
+#### Secure Error Messages
+- **No Information Leakage**: Error messages don't expose internal details
+- **Structured Logging**: Comprehensive logging without sensitive data
+- **Rate Limited Errors**: Error responses are rate limited
 
-### HTTP Transport
+### Dependencies
 
-- Always use HTTPS in production
-- Enable CORS with specific origins
-- Implement rate limiting
-- Use security headers (Helmet)
+#### Security Auditing
+- **npm audit**: Regular dependency vulnerability scanning
+- **Automated Updates**: Dependabot for security updates
+- **Minimal Dependencies**: Reduced attack surface through minimal dependencies
 
-### DNS Rebinding Protection
+## Security Best Practices
 
-The HTTP transport includes DNS rebinding protection:
+### For Developers
 
+#### Code Security
 ```typescript
-const transport = new HttpTransport({
-  enableDnsRebindingProtection: true,
-  allowedHosts: ['127.0.0.1', 'localhost']
+// ✅ Good: Validate all inputs
+server.addTool({
+  name: 'example',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', maxLength: 1000 }
+    },
+    required: ['query']
+  }
+}, async (params) => {
+  // Input is already validated by the framework
+  return await safeOperation(params.query);
+});
+
+// ❌ Bad: No input validation
+server.addTool({
+  name: 'example'
+}, async (params) => {
+  // params could be anything - security risk
+  return await operation(params.query);
 });
 ```
 
-## Development Security
+#### Authentication Context
+```typescript
+// ✅ Good: Use context for authorization
+server.addTool({
+  name: 'admin-tool',
+  inputSchema: { /* ... */ }
+}, async (params, context) => {
+  if (!context.user?.roles?.includes('admin')) {
+    throw new Error('Insufficient permissions');
+  }
+  return await adminOperation(params);
+});
 
-### Test Data
+// ❌ Bad: No authorization check
+server.addTool({
+  name: 'admin-tool',
+  inputSchema: { /* ... */ }
+}, async (params) => {
+  // Anyone can call this - security risk
+  return await adminOperation(params);
+});
+```
 
-- Use obvious test values (`test-token`, `test-secret`)
-- Never use real credentials in tests
-- Mock external services
+### For Deployment
 
-### Local Development
+#### Environment Configuration
+```bash
+# ✅ Required security environment variables
+NODE_ENV=production
+HTTPS_ENABLED=true
+OAUTH_CLIENT_SECRET=your-secure-secret
+SESSION_SECRET=your-session-secret
+RATE_LIMIT_ENABLED=true
+CORS_ORIGINS=https://your-domain.com
 
-- Use localhost for development
-- Keep development and production configs separate
-- Use different OAuth apps for dev/prod
+# ❌ Avoid in production
+NODE_ENV=development
+HTTPS_ENABLED=false
+DEBUG=true
+```
+
+#### HTTPS Configuration
+```typescript
+// ✅ Good: Force HTTPS in production
+const httpTransport = new HttpTransport({
+  port: 3000,
+  httpsOptions: {
+    key: fs.readFileSync('path/to/private-key.pem'),
+    cert: fs.readFileSync('path/to/certificate.pem')
+  },
+  cors: {
+    origin: ['https://your-domain.com'],
+    credentials: true
+  }
+});
+```
+
+### Docker Security
+
+#### Container Security
+```dockerfile
+# ✅ Good: Use non-root user
+FROM node:18-alpine
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S mcp -u 1001
+USER mcp
+
+# ✅ Good: Minimal attack surface
+FROM node:18-alpine as builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:18-alpine
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S mcp -u 1001
+COPY --from=builder /app/node_modules ./node_modules
+COPY --chown=mcp:nodejs . .
+USER mcp
+```
 
 ## Security Checklist
 
-Before committing:
+### Pre-Deployment
+- [ ] All dependencies updated and audited
+- [ ] HTTPS enabled for production
+- [ ] OAuth client secrets properly configured
+- [ ] Session secrets are cryptographically secure
+- [ ] Rate limiting enabled
+- [ ] CORS properly configured
+- [ ] Input validation schemas in place
+- [ ] Error handling doesn't leak information
+- [ ] Logging excludes sensitive data
 
-- [ ] Run `npm run security:audit`
-- [ ] Check no `.env` files are staged
-- [ ] Verify no secrets in code
-- [ ] Ensure test data is clearly fake
-- [ ] Review changed files for sensitive data
+### Runtime Security
+- [ ] Monitor for unusual request patterns
+- [ ] Regular security audits
+- [ ] Keep dependencies updated
+- [ ] Monitor authentication failures
+- [ ] Regular credential rotation
+- [ ] Backup and recovery procedures tested
 
-## Running Security Audit
+## Known Security Considerations
 
-```bash
-# Run security audit
-npm run security:audit
+### Transport-Specific
 
-# This checks for:
-# - Hardcoded passwords/secrets
-# - API keys
-# - Private keys
-# - Email addresses
-# - URLs with credentials
-```
+#### stdio Transport
+- **Local Access Only**: stdio transport should only be used for local development
+- **Process Isolation**: Ensure proper process isolation when using stdio
+- **Command Injection**: Be careful with shell command execution
 
-## Reporting Security Issues
+#### HTTP Transport
+- **Session Fixation**: Sessions are properly rotated
+- **CSRF Protection**: Built-in CSRF protection for state-changing operations
+- **SQL Injection**: Use parameterized queries in tools
 
-If you discover a security vulnerability:
+#### WebSocket Transport
+- **Connection Limits**: Implement connection limits to prevent DoS
+- **Message Size Limits**: Enforce maximum message sizes
+- **Ping/Pong Handling**: Proper handling of ping/pong frames
 
-1. **Do NOT** open a public issue
-2. Email the maintainers privately
-3. Include:
-   - Description of the issue
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
+### Authentication Providers
 
-## Dependencies
+#### Authentik
+- **Token Validation**: Proper JWT token validation
+- **Scope Validation**: Ensure proper scope validation
+- **Refresh Token Security**: Secure refresh token handling
 
-- Regularly update dependencies: `npm update`
-- Check for vulnerabilities: `npm audit`
-- Fix vulnerabilities: `npm audit fix`
+#### OIDC
+- **Issuer Validation**: Proper issuer validation
+- **Nonce Validation**: Proper nonce handling
+- **Clock Skew**: Handle clock skew in token validation
 
-## Production Deployment
+## Incident Response
 
-### Required Environment Variables
+In case of a security incident:
 
-```bash
-# Security
-SESSION_SECRET=<strong-random-string>
-NODE_ENV=production
+1. **Immediate Response**
+   - Assess the scope and impact
+   - Contain the incident
+   - Preserve evidence
 
-# OAuth (if using)
-AUTHENTIK_CLIENT_SECRET=<from-authentik>
-AUTHENTIK_URL=<your-authentik-instance>
+2. **Investigation**
+   - Analyze logs and system state
+   - Identify root cause
+   - Document timeline
 
-# CORS
-CORS_ORIGINS=https://your-domain.com
-```
+3. **Recovery**
+   - Apply security patches
+   - Rotate compromised credentials
+   - Update security measures
 
-### Security Headers
+4. **Communication**
+   - Notify affected users
+   - Provide status updates
+   - Document lessons learned
 
-The framework automatically includes security headers via Helmet:
+## Security Updates
 
-- Content Security Policy
-- X-DNS-Prefetch-Control
-- X-Frame-Options
-- X-Content-Type-Options
-- Strict-Transport-Security (HTTPS)
+Security updates are released as needed and will be clearly marked in release notes. Subscribe to our security advisories:
 
-### Access Control
+- GitHub Security Advisories: [Repository Security](https://github.com/tylercoles-dev/mcp-framework/security)
+- Release Notes: [GitHub Releases](https://github.com/tylercoles-dev/mcp-framework/releases)
 
-- Implement proper group-based access
-- Validate all user inputs
-- Use parameterized queries
-- Implement rate limiting
-
-## Token Security
-
-### MCP Protocol
-
-- Tokens must be validated on every request
-- Implement token expiration
-- Never log token values
-- Use secure token storage
-
-### OAuth Tokens
-
-- Validate token audience
-- Check token expiration
-- Implement token refresh
-- Revoke tokens on logout
-
-## Best Practices
-
-1. **Principle of Least Privilege**: Grant minimum required permissions
-2. **Defense in Depth**: Multiple security layers
-3. **Fail Securely**: Errors shouldn't expose sensitive info
-4. **Keep It Simple**: Complex security often fails
-5. **Stay Updated**: Keep dependencies current
-
-## Additional Resources
-
-- [OWASP Top Ten](https://owasp.org/www-project-top-ten/)
-- [Node.js Security Best Practices](https://nodejs.org/en/docs/guides/security/)
-- [npm Security Best Practices](https://docs.npmjs.com/packages-and-modules/securing-your-code)
+For questions about security, contact: [security@tylercoles.dev](mailto:security@tylercoles.dev)
