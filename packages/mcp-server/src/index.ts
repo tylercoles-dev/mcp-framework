@@ -186,6 +186,218 @@ export interface ToolContext {
 }
 
 /**
+ * Session persistence configuration
+ */
+export interface SessionConfig {
+  /** Enable session persistence */
+  enabled: boolean;
+  /** Session timeout in milliseconds (default: 24 hours) */
+  timeoutMs?: number;
+  /** Maximum number of sessions to store (default: 1000) */
+  maxSessions?: number;
+  /** Session cleanup interval in milliseconds (default: 1 hour) */
+  cleanupIntervalMs?: number;
+  /** Custom session key generator */
+  keyGenerator?: (context: ToolContext) => string | null;
+}
+
+/**
+ * Stored session data
+ */
+export interface SessionData {
+  context: ToolContext;
+  createdAt: number;
+  lastAccessedAt: number;
+  expiresAt: number;
+  accessCount: number;
+}
+
+/**
+ * Session manager for persistent context storage
+ */
+export class SessionManager {
+  private sessions = new Map<string, SessionData>();
+  private cleanupTimer: NodeJS.Timeout | null = null;
+  private config: Required<SessionConfig>;
+
+  constructor(config: SessionConfig) {
+    this.config = {
+      enabled: config.enabled,
+      timeoutMs: config.timeoutMs ?? 24 * 60 * 60 * 1000, // 24 hours
+      maxSessions: config.maxSessions ?? 1000,
+      cleanupIntervalMs: config.cleanupIntervalMs ?? 60 * 60 * 1000, // 1 hour
+      keyGenerator: config.keyGenerator ?? this.defaultKeyGenerator.bind(this)
+    };
+
+    if (this.config.enabled) {
+      this.startCleanupTimer();
+    }
+  }
+
+  /**
+   * Default session key generator using sessionId or user ID
+   */
+  private defaultKeyGenerator(context: ToolContext): string | null {
+    if (context.sessionId) {
+      return `session:${context.sessionId}`;
+    }
+    if (context.user?.id) {
+      return `user:${context.user.id}`;
+    }
+    if (context.correlationId) {
+      return `correlation:${context.correlationId}`;
+    }
+    return null;
+  }
+
+  /**
+   * Store session context
+   */
+  storeSession(context: ToolContext): boolean {
+    if (!this.config.enabled) return false;
+
+    const key = this.config.keyGenerator(context);
+    if (!key) return false;
+
+    const now = Date.now();
+    const existing = this.sessions.get(key);
+
+    const sessionData: SessionData = {
+      context: { ...context },
+      createdAt: existing?.createdAt ?? now,
+      lastAccessedAt: now,
+      expiresAt: now + this.config.timeoutMs,
+      accessCount: (existing?.accessCount ?? 0) + 1
+    };
+
+    // Check if we need to remove old sessions to make room
+    if (this.sessions.size >= this.config.maxSessions && !existing) {
+      this.evictOldestSession();
+    }
+
+    this.sessions.set(key, sessionData);
+    return true;
+  }
+
+  /**
+   * Retrieve session context
+   */
+  retrieveSession(context: ToolContext): ToolContext | null {
+    if (!this.config.enabled) return null;
+
+    const key = this.config.keyGenerator(context);
+    if (!key) return null;
+
+    const sessionData = this.sessions.get(key);
+    if (!sessionData) return null;
+
+    const now = Date.now();
+    
+    // Check if session has expired
+    if (now > sessionData.expiresAt) {
+      this.sessions.delete(key);
+      return null;
+    }
+
+    // Update last accessed time and extend expiration
+    sessionData.lastAccessedAt = now;
+    sessionData.expiresAt = now + this.config.timeoutMs;
+    sessionData.accessCount++;
+
+    return { ...sessionData.context };
+  }
+
+  /**
+   * Delete a specific session
+   */
+  deleteSession(context: ToolContext): boolean {
+    if (!this.config.enabled) return false;
+
+    const key = this.config.keyGenerator(context);
+    if (!key) return false;
+
+    return this.sessions.delete(key);
+  }
+
+  /**
+   * Get session statistics
+   */
+  getSessionStats() {
+    return {
+      totalSessions: this.sessions.size,
+      maxSessions: this.config.maxSessions,
+      enabled: this.config.enabled,
+      activeSessions: Array.from(this.sessions.values()).filter(
+        session => Date.now() <= session.expiresAt
+      ).length
+    };
+  }
+
+  /**
+   * Clean up expired sessions
+   */
+  private cleanupExpiredSessions(): number {
+    const now = Date.now();
+    let removed = 0;
+
+    for (const [key, sessionData] of this.sessions.entries()) {
+      if (now > sessionData.expiresAt) {
+        this.sessions.delete(key);
+        removed++;
+      }
+    }
+
+    return removed;
+  }
+
+  /**
+   * Evict the oldest session to make room for new ones
+   */
+  private evictOldestSession(): boolean {
+    let oldestKey: string | null = null;
+    let oldestTime = Date.now();
+
+    for (const [key, sessionData] of this.sessions.entries()) {
+      if (sessionData.lastAccessedAt < oldestTime) {
+        oldestTime = sessionData.lastAccessedAt;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.sessions.delete(oldestKey);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Start automatic cleanup timer
+   */
+  private startCleanupTimer(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+    }
+
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupExpiredSessions();
+    }, this.config.cleanupIntervalMs);
+  }
+
+  /**
+   * Stop the session manager and cleanup resources
+   */
+  stop(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    this.sessions.clear();
+  }
+}
+
+/**
  * Tool handler function type
  */
 export type ToolHandler<InputArgs extends ZodRawShape> = (
@@ -698,6 +910,7 @@ export interface ServerConfig {
     maxMessageLength?: number;
     loggerLevels?: Record<string, LogLevel>;
   };
+  session?: SessionConfig;
 }
 
 /**
@@ -811,6 +1024,9 @@ export class MCPServer {
   // Request tracing and performance monitoring
   private requestTracer: RequestTracer;
 
+  // Session management
+  private sessionManager: SessionManager | null = null;
+
   constructor(config: ServerConfig) {
     this.config = config;
     this.sdkServer = new SDKMcpServer({
@@ -850,6 +1066,11 @@ export class MCPServer {
     this.requestTracer = new RequestTracer((entry: StructuredLogEntry) => {
       this.logStructuredEntry(entry);
     });
+
+    // Initialize session manager if configured
+    if (config.session) {
+      this.sessionManager = new SessionManager(config.session);
+    }
 
     // Register logging/setLevel endpoint
     this.registerLoggingEndpoints();
@@ -995,13 +1216,68 @@ export class MCPServer {
    */
   setContext(context: Partial<ToolContext>): void {
     this.context = { ...this.context, ...context };
+    
+    // Store session if session management is enabled
+    if (this.sessionManager) {
+      this.sessionManager.storeSession(this.context);
+    }
   }
 
   /**
-   * Get the current context
+   * Get the current context with session restoration
    */
   getContext(): ToolContext {
-    return { ...this.context };
+    let resultContext = { ...this.context };
+    
+    // Attempt to restore session if available
+    if (this.sessionManager) {
+      const restoredContext = this.sessionManager.retrieveSession(this.context);
+      if (restoredContext) {
+        // Merge restored context with current context, preferring current values
+        resultContext = { ...restoredContext, ...this.context };
+      }
+    }
+    
+    return resultContext;
+  }
+
+  /**
+   * Set context with session key for persistent storage
+   */
+  setSessionContext(sessionKey: string, context: Partial<ToolContext>): boolean {
+    if (!this.sessionManager) return false;
+    
+    const sessionContext = { ...context, sessionId: sessionKey };
+    return this.sessionManager.storeSession(sessionContext);
+  }
+
+  /**
+   * Get context for a specific session
+   */
+  getSessionContext(sessionKey: string): ToolContext | null {
+    if (!this.sessionManager) return null;
+    
+    return this.sessionManager.retrieveSession({ sessionId: sessionKey });
+  }
+
+  /**
+   * Delete a specific session
+   */
+  deleteSession(sessionKey: string): boolean {
+    if (!this.sessionManager) return false;
+    
+    return this.sessionManager.deleteSession({ sessionId: sessionKey });
+  }
+
+  /**
+   * Get session management statistics
+   */
+  getSessionStats() {
+    if (!this.sessionManager) {
+      return { enabled: false, totalSessions: 0, maxSessions: 0, activeSessions: 0 };
+    }
+    
+    return this.sessionManager.getSessionStats();
   }
 
   /**
@@ -1518,6 +1794,11 @@ export class MCPServer {
 
     // Stop all transports
     await Promise.all(this.transports.map(t => t.stop()));
+
+    // Stop session manager if enabled
+    if (this.sessionManager) {
+      this.sessionManager.stop();
+    }
 
     this.started = false;
   }
@@ -2466,53 +2747,3 @@ export {
 } from "./errors.js";
 export type { MCPError } from "./errors.js";
 
-// Re-export resource template types
-export type {
-  ResourceTemplate,
-  ResourceTemplateConfig,
-  ResourceTemplateHandler,
-  ResourceTemplateInfo
-};
-
-// Re-export completion types
-export type {
-  CompletionRequest,
-  CompletionResult,
-  CompletionHandler,
-  CompletionConfig
-};
-
-// Re-export sampling types
-export type {
-  SamplingMessage,
-  ModelPreferences,
-  SamplingRequest,
-  SamplingResponse,
-  SamplingHandler,
-  SamplingConfig
-};
-
-// Re-export pagination types
-export type {
-  PaginationCursor,
-  PaginationOptions,
-  PaginatedResult,
-  PaginatedToolsResult,
-  PaginatedResourcesResult,
-  PaginatedPromptsResult,
-  PaginatedResourceTemplatesResult
-};
-
-// Re-export logging types (LogLevel already exported above as enum)
-export type {
-  LogLevelName,
-  LoggingConfig,
-  StructuredLogEntry,
-  LoggingSetLevelRequest,
-  LoggingCapabilities
-};
-
-// Re-export tracing and performance types (classes already exported above)
-export type {
-  PerformanceMetrics
-};
