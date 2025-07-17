@@ -1,0 +1,101 @@
+# Production environment with MySQL
+version: '3.8'
+
+services:
+  kanban-board:
+    build:
+      context: .
+      target: production
+    container_name: kanban-board-mysql
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HOST=0.0.0.0
+      - DB_TYPE=mysql
+      - DATABASE_URL=mysql://kanban_user:kanban_pass@mysql:3306/kanban_db
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=kanban_user
+      - DB_PASSWORD=kanban_pass
+      - DB_NAME=kanban_db
+    volumes:
+      # Persistent logs
+      - kanban_logs:/app/logs
+      # Configuration
+      - ./config:/app/config:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - kanban-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mysql:
+    image: mysql:8.0
+    container_name: kanban-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=kanban_db
+      - MYSQL_USER=kanban_user
+      - MYSQL_PASSWORD=kanban_pass
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+    volumes:
+      # Persistent database storage
+      - mysql_data:/var/lib/mysql
+      # Custom MySQL configuration
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      # Initialization scripts
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "3306:3306"  # Expose for external access (optional)
+    networks:
+      - kanban-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "kanban_user", "-pkanban_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+
+  # Optional: phpMyAdmin for database management
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: kanban-phpmyadmin
+    environment:
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+      - PMA_USER=kanban_user
+      - PMA_PASSWORD=kanban_pass
+      - MYSQL_ROOT_PASSWORD=root_password
+    ports:
+      - "8080:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - kanban-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+    driver: local
+  kanban_logs:
+    driver: local
+
+networks:
+  kanban-network:
+    driver: bridge

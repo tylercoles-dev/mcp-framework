@@ -1,0 +1,62 @@
+{
+  "name": "kanban-board-mcp-example",
+  "version": "1.0.0",
+  "description": "A kanban board MCP server example with React frontend and SQL database",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "kanban-board-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "clean": "rm -rf dist",
+    "db:migrate": "node -e \"import('./dist/database/index.js').then(m => new m.KanbanDatabase({ type: 'sqlite', filename: './kanban.db' }).initialize())\"",
+    "frontend:install": "cd frontend && npm install",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:dev": "cd frontend && npm run dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run frontend:dev\"",
+    "build:all": "npm run build && npm run frontend:build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "kanban",
+    "project-management",
+    "sql",
+    "typescript"
+  ],
+  "author": "MCP Framework Example",
+  "license": "MIT",
+  "dependencies": {
+    "@tylercoles/mcp-server": "workspace:*",
+    "@tylercoles/mcp-transport-http": "workspace:*",
+    "kysely": "^0.27.3",
+    "better-sqlite3": "^9.2.2",
+    "pg": "^8.11.3",
+    "mysql2": "^3.6.5",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.10.5",
+    "@types/pg": "^8.10.9",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylercoles/mcp-framework",
+    "directory": "examples/kanban-board"
+  }
+}
