@@ -234,7 +234,7 @@ describe('MCP Advanced Logging System', () => {
       const logEntry = call.params.data as StructuredLogEntry;
       
       expect(logEntry.message).toHaveLength(1000);
-      expect(logEntry.message).toEndWith('...');
+      expect(logEntry.message.endsWith('...')).toBe(true);
       expect(logEntry.message.substring(0, 997)).toBe('A'.repeat(997));
     });
 
