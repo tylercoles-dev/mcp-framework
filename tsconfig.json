@@ -32,6 +32,9 @@
       "path": "./packages/mcp-auth-authentik"
     },
     {
+      "path": "./packages/mcp-auth-oidc"
+    },
+    {
       "path": "./examples/multi-transport-server"
     }
   ],

@@ -1,0 +1,54 @@
+{
+  "name": "@tylercoles/mcp-auth-oidc",
+  "version": "0.1.0",
+  "description": "Generic OpenID Connect (OIDC) authentication provider for MCP servers",
+  "keywords": [
+    "mcp",
+    "auth",
+    "oidc",
+    "openid",
+    "oauth",
+    "authentication"
+  ],
+  "author": "Tyler Coles",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint --max-warnings 0 --cache --cache-location ../../../.eslintcache/mcp-auth-oidc.eslintcache .",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@tylercoles/mcp-auth": "0.1.0",
+    "@tylercoles/mcp-server": "0.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "nock": "^14.0.0-beta.21",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
