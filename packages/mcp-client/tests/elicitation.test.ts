@@ -1,2 +1,671 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {\n  BaseMCPClient,\n  ElicitationAction,\n  type ElicitationRequest,\n  type ElicitationResponse,\n  type ElicitationField,\n  type ElicitationHandler,\n  type ElicitationValidationError,\n  type ClientConfig\n} from '../src/index.js';\nimport { CallToolResult, JSONRPCMessage, JSONRPCResponse } from '@modelcontextprotocol/sdk/types';\n\n// Mock implementation of BaseMCPClient for testing elicitation\nclass MockElicitationClient extends BaseMCPClient {\n  private mockSDKClient = {\n    connect: vi.fn(),\n    disconnect: vi.fn(),\n    listTools: vi.fn(),\n    callTool: vi.fn(),\n    listResources: vi.fn(),\n    readResource: vi.fn(),\n    listPrompts: vi.fn(),\n    getPrompt: vi.fn()\n  };\n\n  async connect(): Promise<void> {\n    this.setConnectionState('connecting' as any);\n    await this.mockSDKClient.connect();\n    this.setConnectionState('connected' as any);\n  }\n\n  async disconnect(): Promise<void> {\n    this.setConnectionState('disconnecting' as any);\n    await this.mockSDKClient.disconnect();\n    this.setConnectionState('disconnected' as any);\n  }\n\n  async listTools() {\n    this.ensureConnected();\n    return this.mockSDKClient.listTools();\n  }\n\n  async listResources() {\n    this.ensureConnected();\n    return this.mockSDKClient.listResources();\n  }\n\n  async readResource(uri: string) {\n    this.ensureConnected();\n    return this.mockSDKClient.readResource(uri);\n  }\n\n  async listPrompts() {\n    this.ensureConnected();\n    return this.mockSDKClient.listPrompts();\n  }\n\n  async getPrompt(name: string, args?: any) {\n    this.ensureConnected();\n    return this.mockSDKClient.getPrompt(name, args);\n  }\n\n  protected async doCallTool(name: string, args?: any): Promise<CallToolResult> {\n    this.ensureConnected();\n    return this.mockSDKClient.callTool(name, args);\n  }\n\n  async sendMessage(message: JSONRPCMessage): Promise<JSONRPCResponse | void> {\n    this.ensureConnected();\n    \n    if ('id' in message && message.id !== undefined) {\n      return {\n        jsonrpc: '2.0',\n        id: message.id,\n        result: { mock: 'response' }\n      };\n    }\n  }\n\n  protected async sendHeartbeat(): Promise<void> {\n    // Mock heartbeat implementation\n  }\n\n  getSDKClient() {\n    return this.mockSDKClient;\n  }\n\n  // Expose protected methods for testing\n  public setConnectionStatePublic(state: any) {\n    this.setConnectionState(state);\n  }\n\n  public handleElicitationNotificationPublic(notification: any) {\n    return this.handleElicitationNotification(notification);\n  }\n}\n\ndescribe('MCP Elicitation System', () => {\n  let client: MockElicitationClient;\n  let config: ClientConfig;\n\n  beforeEach(() => {\n    config = {\n      timeout: 5000,\n      autoReconnect: false\n    };\n    client = new MockElicitationClient(config);\n  });\n\n  afterEach(async () => {\n    await client.disconnect();\n    vi.clearAllMocks();\n  });\n\n  describe('Elicitation Handler Registration', () => {\n    it('should register and unregister elicitation handlers', () => {\n      const handler: ElicitationHandler = vi.fn().mockResolvedValue({\n        id: 'test-request',\n        action: ElicitationAction.Accept,\n        values: { name: 'Test User' }\n      });\n\n      const unregister = client.registerElicitationHandler(handler);\n      \n      expect(typeof unregister).toBe('function');\n      \n      // Unregister the handler\n      unregister();\n      \n      expect(() => unregister()).not.toThrow(); // Should be safe to call multiple times\n    });\n\n    it('should support multiple elicitation handlers', () => {\n      const handler1: ElicitationHandler = vi.fn();\n      const handler2: ElicitationHandler = vi.fn();\n      \n      const unregister1 = client.registerElicitationHandler(handler1);\n      const unregister2 = client.registerElicitationHandler(handler2);\n      \n      expect(typeof unregister1).toBe('function');\n      expect(typeof unregister2).toBe('function');\n      \n      // Unregister handlers\n      unregister1();\n      unregister2();\n    });\n  });\n\n  describe('Elicitation Request Handling', () => {\n    let testRequest: ElicitationRequest;\n    let mockHandler: ElicitationHandler;\n\n    beforeEach(() => {\n      testRequest = {\n        id: 'test-elicitation-1',\n        title: 'User Information',\n        description: 'Please provide your information',\n        fields: [\n          {\n            name: 'name',\n            type: 'text',\n            label: 'Full Name',\n            required: true\n          },\n          {\n            name: 'email',\n            type: 'email',\n            label: 'Email Address',\n            required: true\n          },\n          {\n            name: 'age',\n            type: 'number',\n            label: 'Age',\n            validation: { min: 18, max: 120 }\n          }\n        ],\n        allowCancel: true\n      };\n\n      mockHandler = vi.fn().mockResolvedValue({\n        id: testRequest.id,\n        action: ElicitationAction.Accept,\n        values: {\n          name: 'John Doe',\n          email: 'john@example.com',\n          age: 30\n        }\n      });\n\n      client.registerElicitationHandler(mockHandler);\n    });\n\n    it('should handle basic elicitation request', async () => {\n      const response = await client.handleElicitationRequest(testRequest);\n\n      expect(response).toEqual({\n        id: testRequest.id,\n        action: ElicitationAction.Accept,\n        values: {\n          name: 'John Doe',\n          email: 'john@example.com',\n          age: 30\n        }\n      });\n\n      expect(mockHandler).toHaveBeenCalledWith(testRequest);\n    });\n\n    it('should handle decline response', async () => {\n      const declineHandler: ElicitationHandler = vi.fn().mockResolvedValue({\n        id: testRequest.id,\n        action: ElicitationAction.Decline,\n        reason: 'Information too sensitive'\n      });\n\n      client.registerElicitationHandler(declineHandler);\n\n      const response = await client.handleElicitationRequest(testRequest);\n\n      expect(response.action).toBe(ElicitationAction.Decline);\n      expect(response.reason).toBe('Information too sensitive');\n    });\n\n    it('should handle cancel response', async () => {\n      const cancelHandler: ElicitationHandler = vi.fn().mockResolvedValue({\n        id: testRequest.id,\n        action: ElicitationAction.Cancel,\n        reason: 'User cancelled'\n      });\n\n      client.registerElicitationHandler(cancelHandler);\n\n      const response = await client.handleElicitationRequest(testRequest);\n\n      expect(response.action).toBe(ElicitationAction.Cancel);\n      expect(response.reason).toBe('User cancelled');\n    });\n\n    it('should track active elicitation requests', async () => {\n      expect(client.getActiveElicitationRequests()).toHaveLength(0);\n\n      // Start handling request but don't await yet\n      const responsePromise = client.handleElicitationRequest(testRequest);\n      \n      // Should be active during handling\n      expect(client.getActiveElicitationRequests()).toHaveLength(1);\n      expect(client.getActiveElicitationRequests()[0].id).toBe(testRequest.id);\n\n      // Wait for completion\n      await responsePromise;\n      \n      // Should be removed after completion\n      expect(client.getActiveElicitationRequests()).toHaveLength(0);\n    });\n\n    it('should handle multiple handlers with fallback', async () => {\n      const faultyHandler: ElicitationHandler = vi.fn().mockRejectedValue(\n        new Error('Handler failed')\n      );\n      \n      const workingHandler: ElicitationHandler = vi.fn().mockResolvedValue({\n        id: testRequest.id,\n        action: ElicitationAction.Accept,\n        values: { name: 'Fallback User' }\n      });\n\n      // Register faulty handler first\n      client.registerElicitationHandler(faultyHandler);\n      client.registerElicitationHandler(workingHandler);\n\n      const response = await client.handleElicitationRequest(testRequest);\n\n      expect(response.action).toBe(ElicitationAction.Accept);\n      expect(response.values?.name).toBe('Fallback User');\n      expect(faultyHandler).toHaveBeenCalled();\n      expect(workingHandler).toHaveBeenCalled();\n    });\n\n    it('should return cancel when no handlers succeed', async () => {\n      const faultyHandler: ElicitationHandler = vi.fn().mockRejectedValue(\n        new Error('Handler failed')\n      );\n\n      client.registerElicitationHandler(faultyHandler);\n\n      const response = await client.handleElicitationRequest(testRequest);\n\n      expect(response.action).toBe(ElicitationAction.Cancel);\n      expect(response.reason).toBe('No elicitation handler available');\n    });\n  });\n\n  describe('Elicitation Validation', () => {\n    let testFields: ElicitationField[];\n\n    beforeEach(() => {\n      testFields = [\n        {\n          name: 'name',\n          type: 'text',\n          label: 'Full Name',\n          required: true,\n          validation: { minLength: 2, maxLength: 100 }\n        },\n        {\n          name: 'email',\n          type: 'email',\n          label: 'Email Address',\n          required: true\n        },\n        {\n          name: 'age',\n          type: 'number',\n          label: 'Age',\n          validation: { min: 18, max: 120 }\n        },\n        {\n          name: 'website',\n          type: 'url',\n          label: 'Website',\n          required: false\n        },\n        {\n          name: 'subscribe',\n          type: 'boolean',\n          label: 'Subscribe to newsletter',\n          required: false\n        },\n        {\n          name: 'country',\n          type: 'select',\n          label: 'Country',\n          required: true,\n          validation: {\n            options: [\n              { value: 'us', label: 'United States' },\n              { value: 'ca', label: 'Canada' },\n              { value: 'uk', label: 'United Kingdom' }\n            ]\n          }\n        }\n      ];\n    });\n\n    it('should validate required fields', () => {\n      const values = {\n        email: 'test@example.com',\n        age: 25\n        // Missing required 'name' and 'country'\n      };\n\n      const errors = client.validateElicitationValues(testFields, values);\n      \n      expect(errors).toHaveLength(2);\n      expect(errors.find(e => e.field === 'name')).toEqual({\n        field: 'name',\n        message: 'Full Name is required',\n        code: 'REQUIRED'\n      });\n      expect(errors.find(e => e.field === 'country')).toEqual({\n        field: 'country',\n        message: 'Country is required',\n        code: 'REQUIRED'\n      });\n    });\n\n    it('should validate number types and ranges', () => {\n      const values = {\n        name: 'John Doe',\n        email: 'john@example.com',\n        age: 150, // Exceeds max\n        country: 'us'\n      };\n\n      const errors = client.validateElicitationValues(testFields, values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'age',\n        message: 'Age must be at most 120',\n        code: 'MAX_VALUE'\n      });\n    });\n\n    it('should validate email format', () => {\n      const values = {\n        name: 'John Doe',\n        email: 'invalid-email',\n        country: 'us'\n      };\n\n      const errors = client.validateElicitationValues(testFields, values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'email',\n        message: 'Email Address must be a valid email address',\n        code: 'INVALID_EMAIL'\n      });\n    });\n\n    it('should validate URL format', () => {\n      const values = {\n        name: 'John Doe',\n        email: 'john@example.com',\n        website: 'not-a-url',\n        country: 'us'\n      };\n\n      const errors = client.validateElicitationValues(testFields, values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'website',\n        message: 'Website must be a valid URL',\n        code: 'INVALID_URL'\n      });\n    });\n\n    it('should validate boolean types', () => {\n      const booleanField: ElicitationField = {\n        name: 'terms',\n        type: 'boolean',\n        label: 'Accept Terms',\n        required: true\n      };\n\n      const values = {\n        terms: 'yes' // Should be boolean\n      };\n\n      const errors = client.validateElicitationValues([booleanField], values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'terms',\n        message: 'Accept Terms must be true or false',\n        code: 'INVALID_TYPE'\n      });\n    });\n\n    it('should validate select options', () => {\n      const values = {\n        name: 'John Doe',\n        email: 'john@example.com',\n        country: 'invalid-country'\n      };\n\n      const errors = client.validateElicitationValues(testFields, values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'country',\n        message: 'Country must be one of the provided options',\n        code: 'INVALID_OPTION'\n      });\n    });\n\n    it('should validate multiselect options', () => {\n      const multiselectField: ElicitationField = {\n        name: 'interests',\n        type: 'multiselect',\n        label: 'Interests',\n        validation: {\n          options: [\n            { value: 'tech', label: 'Technology' },\n            { value: 'sports', label: 'Sports' },\n            { value: 'music', label: 'Music' }\n          ]\n        }\n      };\n\n      const values = {\n        interests: ['tech', 'invalid-interest']\n      };\n\n      const errors = client.validateElicitationValues([multiselectField], values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'interests',\n        message: 'Interests must contain only valid options',\n        code: 'INVALID_OPTIONS'\n      });\n    });\n\n    it('should validate string length constraints', () => {\n      const values = {\n        name: 'J', // Too short\n        email: 'john@example.com',\n        country: 'us'\n      };\n\n      const errors = client.validateElicitationValues(testFields, values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'name',\n        message: 'Full Name must be at least 2 characters',\n        code: 'MIN_LENGTH'\n      });\n    });\n\n    it('should validate field dependencies', () => {\n      const dependentField: ElicitationField = {\n        name: 'other_specify',\n        type: 'text',\n        label: 'Please specify',\n        dependencies: [\n          { field: 'country', value: 'other' }\n        ]\n      };\n\n      const fieldsWithDependency = [...testFields, dependentField];\n      \n      const values = {\n        name: 'John Doe',\n        email: 'john@example.com',\n        country: 'us',\n        other_specify: 'Some value' // Should not be provided when country is not 'other'\n      };\n\n      const errors = client.validateElicitationValues(fieldsWithDependency, values);\n      \n      expect(errors).toHaveLength(1);\n      expect(errors[0]).toEqual({\n        field: 'other_specify',\n        message: 'Please specify is only valid when country is other',\n        code: 'DEPENDENCY_NOT_MET'\n      });\n    });\n\n    it('should skip validation for empty optional fields', () => {\n      const values = {\n        name: 'John Doe',\n        email: 'john@example.com',\n        country: 'us'\n        // age, website, subscribe are optional and not provided\n      };\n\n      const errors = client.validateElicitationValues(testFields, values);\n      \n      expect(errors).toHaveLength(0);\n    });\n  });\n\n  describe('Request Format Validation', () => {\n    it('should validate elicitation request format', async () => {\n      const invalidRequest = {\n        // Missing required fields\n        title: 'Test'\n      } as any;\n\n      await expect(client.handleElicitationRequest(invalidRequest)).rejects.toThrow(\n        'Invalid elicitation request format'\n      );\n    });\n\n    it('should validate response with accept action has values', async () => {\n      const testRequest: ElicitationRequest = {\n        id: 'test',\n        title: 'Test',\n        fields: [\n          {\n            name: 'name',\n            type: 'text',\n            label: 'Name',\n            required: true\n          }\n        ]\n      };\n\n      const invalidHandler: ElicitationHandler = vi.fn().mockResolvedValue({\n        id: 'test',\n        action: ElicitationAction.Accept,\n        values: {\n          name: '' // Empty required field\n        }\n      });\n\n      client.registerElicitationHandler(invalidHandler);\n\n      const response = await client.handleElicitationRequest(testRequest);\n      \n      // Should fall back to cancel if validation fails\n      expect(response.action).toBe(ElicitationAction.Cancel);\n    });\n  });\n\n  describe('Notification Handling', () => {\n    beforeEach(async () => {\n      await client.connect();\n    });\n\n    it('should handle elicitation request notifications', async () => {\n      const sendMessageSpy = vi.spyOn(client, 'sendMessage').mockResolvedValue();\n      \n      const testRequest: ElicitationRequest = {\n        id: 'notification-test',\n        title: 'Test Notification',\n        fields: [\n          {\n            name: 'response',\n            type: 'text',\n            label: 'Response',\n            required: true\n          }\n        ]\n      };\n\n      const mockHandler: ElicitationHandler = vi.fn().mockResolvedValue({\n        id: 'notification-test',\n        action: ElicitationAction.Accept,\n        values: { response: 'Test response' }\n      });\n\n      client.registerElicitationHandler(mockHandler);\n\n      const notification = {\n        jsonrpc: '2.0',\n        method: 'notifications/elicitation/request',\n        params: testRequest\n      };\n\n      await client.handleElicitationNotificationPublic(notification);\n\n      expect(mockHandler).toHaveBeenCalledWith(testRequest);\n      expect(sendMessageSpy).toHaveBeenCalledWith({\n        jsonrpc: '2.0',\n        method: 'elicitation/response',\n        params: {\n          id: 'notification-test',\n          action: ElicitationAction.Accept,\n          values: { response: 'Test response' }\n        }\n      });\n    });\n\n    it('should handle elicitation errors in notifications', async () => {\n      const sendMessageSpy = vi.spyOn(client, 'sendMessage').mockResolvedValue();\n      \n      const testRequest: ElicitationRequest = {\n        id: 'error-test',\n        title: 'Error Test',\n        fields: []\n      };\n\n      // No handler registered - should result in error\n\n      const notification = {\n        jsonrpc: '2.0',\n        method: 'notifications/elicitation/request',\n        params: testRequest\n      };\n\n      await client.handleElicitationNotificationPublic(notification);\n\n      expect(sendMessageSpy).toHaveBeenCalledWith({\n        jsonrpc: '2.0',\n        method: 'elicitation/response',\n        params: {\n          id: 'error-test',\n          action: ElicitationAction.Cancel,\n          reason: 'No elicitation handler available'\n        }\n      });\n    });\n  });\n});
+import {
+  BaseMCPClient,
+  ElicitationAction,
+  type ElicitationRequest,
+  type ElicitationResponse,
+  type ElicitationField,
+  type ElicitationHandler,
+  type ElicitationValidationError,
+  type ClientConfig
+} from '../src/index.js';
+import { CallToolResult, JSONRPCMessage, JSONRPCResponse } from '@modelcontextprotocol/sdk/types';
+
+// Mock implementation of BaseMCPClient for testing elicitation
+class MockElicitationClient extends BaseMCPClient {
+  private mockSDKClient = {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    listTools: vi.fn(),
+    callTool: vi.fn(),
+    listResources: vi.fn(),
+    readResource: vi.fn(),
+    listPrompts: vi.fn(),
+    getPrompt: vi.fn()
+  };
+
+  async connect(): Promise<void> {
+    this.setConnectionState('connecting' as any);
+    await this.mockSDKClient.connect();
+    this.setConnectionState('connected' as any);
+  }
+
+  async disconnect(): Promise<void> {
+    this.setConnectionState('disconnecting' as any);
+    await this.mockSDKClient.disconnect();
+    this.setConnectionState('disconnected' as any);
+  }
+
+  async listTools() {
+    this.ensureConnected();
+    return this.mockSDKClient.listTools();
+  }
+
+  async listResources() {
+    this.ensureConnected();
+    return this.mockSDKClient.listResources();
+  }
+
+  async readResource(uri: string) {
+    this.ensureConnected();
+    return this.mockSDKClient.readResource(uri);
+  }
+
+  async listPrompts() {
+    this.ensureConnected();
+    return this.mockSDKClient.listPrompts();
+  }
+
+  async getPrompt(name: string, args?: any) {
+    this.ensureConnected();
+    return this.mockSDKClient.getPrompt(name, args);
+  }
+
+  protected async doCallTool(name: string, args?: any): Promise<CallToolResult> {
+    this.ensureConnected();
+    return this.mockSDKClient.callTool(name, args);
+  }
+
+  async sendMessage(message: JSONRPCMessage): Promise<JSONRPCResponse | void> {
+    this.ensureConnected();
+    
+    if ('id' in message && message.id !== undefined) {
+      return {
+        jsonrpc: '2.0',
+        id: message.id,
+        result: { mock: 'response' }
+      };
+    }
+  }
+
+  protected async sendHeartbeat(): Promise<void> {
+    // Mock heartbeat implementation
+  }
+
+  getSDKClient() {
+    return this.mockSDKClient;
+  }
+
+  // Expose protected methods for testing
+  public setConnectionStatePublic(state: any) {
+    this.setConnectionState(state);
+  }
+
+  public handleElicitationNotificationPublic(notification: any) {
+    return this.handleElicitationNotification(notification);
+  }
+}
+
+describe('MCP Elicitation System', () => {
+  let client: MockElicitationClient;
+  let config: ClientConfig;
+
+  beforeEach(() => {
+    config = {
+      timeout: 5000,
+      autoReconnect: false
+    };
+    client = new MockElicitationClient(config);
+  });
+
+  afterEach(async () => {
+    await client.disconnect();
+    vi.clearAllMocks();
+  });
+
+  describe('Elicitation Handler Registration', () => {
+    it('should register and unregister elicitation handlers', () => {
+      const handler: ElicitationHandler = vi.fn().mockResolvedValue({
+        id: 'test-request',
+        action: ElicitationAction.Accept,
+        values: { name: 'Test User' }
+      });
+
+      const unregister = client.registerElicitationHandler(handler);
+      
+      expect(typeof unregister).toBe('function');
+      
+      // Unregister the handler
+      unregister();
+      
+      expect(() => unregister()).not.toThrow(); // Should be safe to call multiple times
+    });
+
+    it('should support multiple elicitation handlers', () => {
+      const handler1: ElicitationHandler = vi.fn();
+      const handler2: ElicitationHandler = vi.fn();
+      
+      const unregister1 = client.registerElicitationHandler(handler1);
+      const unregister2 = client.registerElicitationHandler(handler2);
+      
+      expect(typeof unregister1).toBe('function');
+      expect(typeof unregister2).toBe('function');
+      
+      // Unregister handlers
+      unregister1();
+      unregister2();
+    });
+  });
+
+  describe('Elicitation Request Handling', () => {
+    let testRequest: ElicitationRequest;
+    let mockHandler: ElicitationHandler;
+
+    beforeEach(() => {
+      testRequest = {
+        id: 'test-elicitation-1',
+        title: 'User Information',
+        description: 'Please provide your information',
+        fields: [
+          {
+            name: 'name',
+            type: 'text',
+            label: 'Full Name',
+            required: true
+          },
+          {
+            name: 'email',
+            type: 'email',
+            label: 'Email Address',
+            required: true
+          },
+          {
+            name: 'age',
+            type: 'number',
+            label: 'Age',
+            validation: { min: 18, max: 120 }
+          }
+        ],
+        allowCancel: true
+      };
+
+      mockHandler = vi.fn().mockResolvedValue({
+        id: testRequest.id,
+        action: ElicitationAction.Accept,
+        values: {
+          name: 'John Doe',
+          email: 'john@example.com',
+          age: 30
+        }
+      });
+
+      client.registerElicitationHandler(mockHandler);
+    });
+
+    it('should handle basic elicitation request', async () => {
+      const response = await client.handleElicitationRequest(testRequest);
+
+      expect(response).toEqual({
+        id: testRequest.id,
+        action: ElicitationAction.Accept,
+        values: {
+          name: 'John Doe',
+          email: 'john@example.com',
+          age: 30
+        }
+      });
+
+      expect(mockHandler).toHaveBeenCalledWith(testRequest);
+    });
+
+    it('should handle decline response', async () => {
+      const declineHandler: ElicitationHandler = vi.fn().mockResolvedValue({
+        id: testRequest.id,
+        action: ElicitationAction.Decline,
+        reason: 'Information too sensitive'
+      });
+
+      client.registerElicitationHandler(declineHandler);
+
+      const response = await client.handleElicitationRequest(testRequest);
+
+      expect(response.action).toBe(ElicitationAction.Decline);
+      expect(response.reason).toBe('Information too sensitive');
+    });
+
+    it('should handle cancel response', async () => {
+      const cancelHandler: ElicitationHandler = vi.fn().mockResolvedValue({
+        id: testRequest.id,
+        action: ElicitationAction.Cancel,
+        reason: 'User cancelled'
+      });
+
+      client.registerElicitationHandler(cancelHandler);
+
+      const response = await client.handleElicitationRequest(testRequest);
+
+      expect(response.action).toBe(ElicitationAction.Cancel);
+      expect(response.reason).toBe('User cancelled');
+    });
+
+    it('should track active elicitation requests', async () => {
+      expect(client.getActiveElicitationRequests()).toHaveLength(0);
+
+      // Start handling request but don't await yet
+      const responsePromise = client.handleElicitationRequest(testRequest);
+      
+      // Should be active during handling
+      expect(client.getActiveElicitationRequests()).toHaveLength(1);
+      expect(client.getActiveElicitationRequests()[0].id).toBe(testRequest.id);
+
+      // Wait for completion
+      await responsePromise;
+      
+      // Should be removed after completion
+      expect(client.getActiveElicitationRequests()).toHaveLength(0);
+    });
+
+    it('should handle multiple handlers with fallback', async () => {
+      const faultyHandler: ElicitationHandler = vi.fn().mockRejectedValue(
+        new Error('Handler failed')
+      );
+      
+      const workingHandler: ElicitationHandler = vi.fn().mockResolvedValue({
+        id: testRequest.id,
+        action: ElicitationAction.Accept,
+        values: { name: 'Fallback User' }
+      });
+
+      // Register faulty handler first
+      client.registerElicitationHandler(faultyHandler);
+      client.registerElicitationHandler(workingHandler);
+
+      const response = await client.handleElicitationRequest(testRequest);
+
+      expect(response.action).toBe(ElicitationAction.Accept);
+      expect(response.values?.name).toBe('Fallback User');
+      expect(faultyHandler).toHaveBeenCalled();
+      expect(workingHandler).toHaveBeenCalled();
+    });
+
+    it('should return cancel when no handlers succeed', async () => {
+      const faultyHandler: ElicitationHandler = vi.fn().mockRejectedValue(
+        new Error('Handler failed')
+      );
+
+      client.registerElicitationHandler(faultyHandler);
+
+      const response = await client.handleElicitationRequest(testRequest);
+
+      expect(response.action).toBe(ElicitationAction.Cancel);
+      expect(response.reason).toBe('No elicitation handler available');
+    });
+  });
+
+  describe('Elicitation Validation', () => {
+    let testFields: ElicitationField[];
+
+    beforeEach(() => {
+      testFields = [
+        {
+          name: 'name',
+          type: 'text',
+          label: 'Full Name',
+          required: true,
+          validation: { minLength: 2, maxLength: 100 }
+        },
+        {
+          name: 'email',
+          type: 'email',
+          label: 'Email Address',
+          required: true
+        },
+        {
+          name: 'age',
+          type: 'number',
+          label: 'Age',
+          validation: { min: 18, max: 120 }
+        },
+        {
+          name: 'website',
+          type: 'url',
+          label: 'Website',
+          required: false
+        },
+        {
+          name: 'subscribe',
+          type: 'boolean',
+          label: 'Subscribe to newsletter',
+          required: false
+        },
+        {
+          name: 'country',
+          type: 'select',
+          label: 'Country',
+          required: true,
+          validation: {
+            options: [
+              { value: 'us', label: 'United States' },
+              { value: 'ca', label: 'Canada' },
+              { value: 'uk', label: 'United Kingdom' }
+            ]
+          }
+        }
+      ];
+    });
+
+    it('should validate required fields', () => {
+      const values = {
+        email: 'test@example.com',
+        age: 25
+        // Missing required 'name' and 'country'
+      };
+
+      const errors = client.validateElicitationValues(testFields, values);
+      
+      expect(errors).toHaveLength(2);
+      expect(errors.find(e => e.field === 'name')).toEqual({
+        field: 'name',
+        message: 'Full Name is required',
+        code: 'REQUIRED'
+      });
+      expect(errors.find(e => e.field === 'country')).toEqual({
+        field: 'country',
+        message: 'Country is required',
+        code: 'REQUIRED'
+      });
+    });
+
+    it('should validate number types and ranges', () => {
+      const values = {
+        name: 'John Doe',
+        email: 'john@example.com',
+        age: 150, // Exceeds max
+        country: 'us'
+      };
+
+      const errors = client.validateElicitationValues(testFields, values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'age',
+        message: 'Age must be at most 120',
+        code: 'MAX_VALUE'
+      });
+    });
+
+    it('should validate email format', () => {
+      const values = {
+        name: 'John Doe',
+        email: 'invalid-email',
+        country: 'us'
+      };
+
+      const errors = client.validateElicitationValues(testFields, values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'email',
+        message: 'Email Address must be a valid email address',
+        code: 'INVALID_EMAIL'
+      });
+    });
+
+    it('should validate URL format', () => {
+      const values = {
+        name: 'John Doe',
+        email: 'john@example.com',
+        website: 'not-a-url',
+        country: 'us'
+      };
+
+      const errors = client.validateElicitationValues(testFields, values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'website',
+        message: 'Website must be a valid URL',
+        code: 'INVALID_URL'
+      });
+    });
+
+    it('should validate boolean types', () => {
+      const booleanField: ElicitationField = {
+        name: 'terms',
+        type: 'boolean',
+        label: 'Accept Terms',
+        required: true
+      };
+
+      const values = {
+        terms: 'yes' // Should be boolean
+      };
+
+      const errors = client.validateElicitationValues([booleanField], values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'terms',
+        message: 'Accept Terms must be true or false',
+        code: 'INVALID_TYPE'
+      });
+    });
+
+    it('should validate select options', () => {
+      const values = {
+        name: 'John Doe',
+        email: 'john@example.com',
+        country: 'invalid-country'
+      };
+
+      const errors = client.validateElicitationValues(testFields, values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'country',
+        message: 'Country must be one of the provided options',
+        code: 'INVALID_OPTION'
+      });
+    });
+
+    it('should validate multiselect options', () => {
+      const multiselectField: ElicitationField = {
+        name: 'interests',
+        type: 'multiselect',
+        label: 'Interests',
+        validation: {
+          options: [
+            { value: 'tech', label: 'Technology' },
+            { value: 'sports', label: 'Sports' },
+            { value: 'music', label: 'Music' }
+          ]
+        }
+      };
+
+      const values = {
+        interests: ['tech', 'invalid-interest']
+      };
+
+      const errors = client.validateElicitationValues([multiselectField], values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'interests',
+        message: 'Interests must contain only valid options',
+        code: 'INVALID_OPTIONS'
+      });
+    });
+
+    it('should validate string length constraints', () => {
+      const values = {
+        name: 'J', // Too short
+        email: 'john@example.com',
+        country: 'us'
+      };
+
+      const errors = client.validateElicitationValues(testFields, values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'name',
+        message: 'Full Name must be at least 2 characters',
+        code: 'MIN_LENGTH'
+      });
+    });
+
+    it('should validate field dependencies', () => {
+      const dependentField: ElicitationField = {
+        name: 'other_specify',
+        type: 'text',
+        label: 'Please specify',
+        dependencies: [
+          { field: 'country', value: 'other' }
+        ]
+      };
+
+      const fieldsWithDependency = [...testFields, dependentField];
+      
+      const values = {
+        name: 'John Doe',
+        email: 'john@example.com',
+        country: 'us',
+        other_specify: 'Some value' // Should not be provided when country is not 'other'
+      };
+
+      const errors = client.validateElicitationValues(fieldsWithDependency, values);
+      
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual({
+        field: 'other_specify',
+        message: 'Please specify is only valid when country is other',
+        code: 'DEPENDENCY_NOT_MET'
+      });
+    });
+
+    it('should skip validation for empty optional fields', () => {
+      const values = {
+        name: 'John Doe',
+        email: 'john@example.com',
+        country: 'us'
+        // age, website, subscribe are optional and not provided
+      };
+
+      const errors = client.validateElicitationValues(testFields, values);
+      
+      expect(errors).toHaveLength(0);
+    });
+  });
+
+  describe('Request Format Validation', () => {
+    it('should validate elicitation request format', async () => {
+      const invalidRequest = {
+        // Missing required fields
+        title: 'Test'
+      } as any;
+
+      await expect(client.handleElicitationRequest(invalidRequest)).rejects.toThrow(
+        'Invalid elicitation request format'
+      );
+    });
+
+    it('should validate response with accept action has values', async () => {
+      const testRequest: ElicitationRequest = {
+        id: 'test',
+        title: 'Test',
+        fields: [
+          {
+            name: 'name',
+            type: 'text',
+            label: 'Name',
+            required: true
+          }
+        ]
+      };
+
+      const invalidHandler: ElicitationHandler = vi.fn().mockResolvedValue({
+        id: 'test',
+        action: ElicitationAction.Accept,
+        values: {
+          name: '' // Empty required field
+        }
+      });
+
+      client.registerElicitationHandler(invalidHandler);
+
+      const response = await client.handleElicitationRequest(testRequest);
+      
+      // Should fall back to cancel if validation fails
+      expect(response.action).toBe(ElicitationAction.Cancel);
+    });
+  });
+
+  describe('Notification Handling', () => {
+    beforeEach(async () => {
+      await client.connect();
+    });
+
+    it('should handle elicitation request notifications', async () => {
+      const sendMessageSpy = vi.spyOn(client, 'sendMessage').mockResolvedValue();
+      
+      const testRequest: ElicitationRequest = {
+        id: 'notification-test',
+        title: 'Test Notification',
+        fields: [
+          {
+            name: 'response',
+            type: 'text',
+            label: 'Response',
+            required: true
+          }
+        ]
+      };
+
+      const mockHandler: ElicitationHandler = vi.fn().mockResolvedValue({
+        id: 'notification-test',
+        action: ElicitationAction.Accept,
+        values: { response: 'Test response' }
+      });
+
+      client.registerElicitationHandler(mockHandler);
+
+      const notification = {
+        jsonrpc: '2.0',
+        method: 'notifications/elicitation/request',
+        params: testRequest
+      };
+
+      await client.handleElicitationNotificationPublic(notification);
+
+      expect(mockHandler).toHaveBeenCalledWith(testRequest);
+      expect(sendMessageSpy).toHaveBeenCalledWith({
+        jsonrpc: '2.0',
+        method: 'elicitation/response',
+        params: {
+          id: 'notification-test',
+          action: ElicitationAction.Accept,
+          values: { response: 'Test response' }
+        }
+      });
+    });
+
+    it('should handle elicitation errors in notifications', async () => {
+      const sendMessageSpy = vi.spyOn(client, 'sendMessage').mockResolvedValue();
+      
+      const testRequest: ElicitationRequest = {
+        id: 'error-test',
+        title: 'Error Test',
+        fields: []
+      };
+
+      // No handler registered - should result in error
+
+      const notification = {
+        jsonrpc: '2.0',
+        method: 'notifications/elicitation/request',
+        params: testRequest
+      };
+
+      await client.handleElicitationNotificationPublic(notification);
+
+      expect(sendMessageSpy).toHaveBeenCalledWith({
+        jsonrpc: '2.0',
+        method: 'elicitation/response',
+        params: {
+          id: 'error-test',
+          action: ElicitationAction.Cancel,
+          reason: 'No elicitation handler available'
+        }
+      });
+    });
+  });
+});
