@@ -1,6 +1,6 @@
 {
   "name": "@tylercoles/mcp-auth-oidc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generic OpenID Connect (OIDC) authentication provider for MCP servers",
   "keywords": [
     "mcp",
@@ -35,8 +35,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@tylercoles/mcp-auth": "0.1.0",
-    "@tylercoles/mcp-server": "0.1.0",
+    "@tylercoles/mcp-auth": "0.2.0",
+    "@tylercoles/mcp-server": "0.2.0",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2",
     "zod": "^3.23.8"

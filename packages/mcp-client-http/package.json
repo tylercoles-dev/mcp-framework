@@ -1,6 +1,6 @@
 {
     "name": "@tylercoles/mcp-client-http",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "description": "MCP client for StreamableHTTP transport - wraps HTTP MCP servers with clean TypeScript interfaces",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",

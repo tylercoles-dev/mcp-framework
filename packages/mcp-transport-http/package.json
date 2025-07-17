@@ -1,6 +1,6 @@
 {
   "name": "@tylercoles/mcp-transport-http",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "HTTP transport with SSE support for MCP servers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -36,9 +36,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.1",
-    "@tylercoles/mcp-auth": "^0.1.1",
-    "@tylercoles/mcp-server": "^0.1.1",
-    "@tylercoles/mcp-rate-limit": "^0.1.0",
+    "@tylercoles/mcp-auth": "^0.2.0",
+    "@tylercoles/mcp-server": "^0.2.0",
+    "@tylercoles/mcp-rate-limit": "^0.2.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "helmet": "^8.0.0"

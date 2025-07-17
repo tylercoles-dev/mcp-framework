@@ -32,8 +32,8 @@
   "author": "MCP Framework Example",
   "license": "MIT",
   "dependencies": {
-    "@tylercoles/mcp-server": "workspace:*",
-    "@tylercoles/mcp-transport-http": "workspace:*",
+    "@tylercoles/mcp-server": "0.2.0",
+    "@tylercoles/mcp-transport-http": "0.2.0",
     "kysely": "^0.27.3",
     "better-sqlite3": "^9.2.2",
     "pg": "^8.11.3",

@@ -17,9 +17,9 @@
     "debug": "tsx --inspect src/index.ts"
   },
   "dependencies": {
-    "@tylercoles/mcp-auth-authentik": "0.1.0",
-    "@tylercoles/mcp-server": "0.1.0",
-    "@tylercoles/mcp-transport-http": "0.1.0",
+    "@tylercoles/mcp-auth-authentik": "0.2.0",
+    "@tylercoles/mcp-server": "0.2.0",
+    "@tylercoles/mcp-transport-http": "0.2.0",
     "nats": "^2.20.0",
     "uuid": "^11.1.0",
     "winston": "^3.11.0",

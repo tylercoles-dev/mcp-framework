@@ -1,6 +1,6 @@
 {
     "name": "@tylercoles/mcp-client-stdio",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "description": "MCP client for stdio transport - wraps stdio MCP servers with clean TypeScript interfaces",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
