@@ -44,6 +44,7 @@ export const CreateCardSchema = z.object({
 export const UpdateCardSchema = CreateCardSchema.partial().omit({ board_id: true });
 
 export const MoveCardSchema = z.object({
+  card_id: z.number().int().positive(),
   column_id: z.number().int().positive(),
   position: z.number().int().min(0),
 });

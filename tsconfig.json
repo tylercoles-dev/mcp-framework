@@ -10,7 +10,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": true
+    "composite": true,
+    "allowSyntheticDefaultImports": true
   },
   "references": [
     {
@@ -35,7 +36,7 @@
       "path": "./packages/mcp-auth-oidc"
     },
     {
-      "path": "./examples/multi-transport-server"
+      "path": "./packages/mcp-rate-limit"
     }
   ],
   "exclude": [

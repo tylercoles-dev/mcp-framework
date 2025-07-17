@@ -251,7 +251,10 @@ describe('MCP Sampling System', () => {
           modelPreferences,
           systemPrompt: 'You are a helpful technical assistant.'
         })
-      );\n    });\n\n    it('should handle multi-modal messages', async () => {
+      );
+    });
+
+    it('should handle multi-modal messages', async () => {
       const request: SamplingRequest = {
         messages: [
           {
@@ -279,7 +282,9 @@ describe('MCP Sampling System', () => {
           messages: request.messages
         })
       );
-    });\n\n    it('should add server context when includeContext is true', async () => {
+    });
+
+    it('should add server context when includeContext is true', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',

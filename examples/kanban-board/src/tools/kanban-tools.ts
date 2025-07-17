@@ -195,7 +195,11 @@ export class KanbanTools {
       handler: async (args): Promise<ToolResult> => {
         try {
           const input = CreateBoardSchema.parse(args);
-          const board = await this.db.createBoard(input);
+          const board = await this.db.createBoard({
+            name: input.name,
+            description: input.description ?? null,
+            color: input.color,
+          });
 
           return {
             content: [
@@ -540,7 +544,16 @@ export class KanbanTools {
       handler: async (args): Promise<ToolResult> => {
         try {
           const input = CreateCardSchema.parse(args);
-          const card = await this.db.createCard(input);
+          const card = await this.db.createCard({
+            board_id: input.board_id,
+            column_id: input.column_id,
+            title: input.title,
+            description: input.description ?? null,
+            position: input.position,
+            priority: input.priority,
+            assigned_to: input.assigned_to ?? null,
+            due_date: input.due_date ?? null,
+          });
 
           return {
             content: [
@@ -951,7 +964,11 @@ export class KanbanTools {
       handler: async (args): Promise<ToolResult> => {
         try {
           const input = CreateCommentSchema.parse(args);
-          const comment = await this.db.addComment(input);
+          const comment = await this.db.addComment({
+            card_id: input.card_id,
+            content: input.content,
+            author: input.author ?? null,
+          });
 
           return {
             content: [

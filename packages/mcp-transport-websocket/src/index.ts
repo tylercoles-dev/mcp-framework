@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server as HttpServer, createServer } from 'http';
-import type { Transport, MCPServer, MCPErrorFactory, MCPErrorCode } from '@tylercoles/mcp-server';
+import type { Transport, MCPServer } from '@tylercoles/mcp-server';
 import { JSONRPCMessage, JSONRPCRequest, JSONRPCResponse, JSONRPCNotification } from '@modelcontextprotocol/sdk/types';
 
 /**
@@ -208,9 +208,9 @@ export class WebSocketConnection {
    * Send an error response
    */
   sendError(code: number, message: string, id?: string | number | null): Promise<void> {
-    const errorResponse: JSONRPCResponse = {
-      jsonrpc: '2.0',
-      id: id || null,
+    const errorResponse = {
+      jsonrpc: '2.0' as const,
+      id: id ?? 'auto-generated-id',
       error: {
         code,
         message
@@ -489,6 +489,4 @@ export class WebSocketTransport implements Transport {
   }
 }
 
-// Export types and classes
-export type { WebSocketConfig };
-export { ConnectionState, WebSocketConnection, WebSocketTransport };
+// All types and classes are already exported where they are defined

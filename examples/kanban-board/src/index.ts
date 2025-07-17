@@ -35,9 +35,7 @@ async function createKanbanServer() {
   // Create MCP server
   const server = new MCPServer({
     name: 'kanban-board',
-    title: 'Kanban Board MCP Server',
     version: '1.0.0',
-    description: 'A Model Context Protocol server for managing kanban boards with SQL database backend',
   });
 
   // Setup tools

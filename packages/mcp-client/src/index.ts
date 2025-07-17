@@ -219,7 +219,7 @@ export interface IMultiServerMCPClient {
  */
 export abstract class BaseMCPClient implements IEnhancedMCPClient {
   protected connectionState = ConnectionState.Disconnected;
-  protected config: Required<ClientConfig>;
+  protected config: InternalClientConfig;
   protected sessionContext: SessionContext | null = null;
   protected progressCallbacks: Set<ProgressCallback> = new Set();
   protected connectionStateCallbacks: Set<ConnectionStateCallback> = new Set();
@@ -239,17 +239,19 @@ export abstract class BaseMCPClient implements IEnhancedMCPClient {
 
   constructor(config: ClientConfig = {}) {
     this.config = {
-      timeout: 30000,
-      retries: 3,
-      debug: false,
-      autoReconnect: true,
-      maxRetries: 5,
-      retryDelay: 1000,
-      heartbeatInterval: 30000,
-      heartbeatTimeout: 10000,
-      sessionPersistence: false,
-      sessionTimeout: 3600000, // 1 hour
-      ...config
+      timeout: config.timeout ?? 30000,
+      retries: config.retries ?? 3,
+      debug: config.debug ?? false,
+      autoReconnect: config.autoReconnect ?? true,
+      maxRetries: config.maxRetries ?? 5,
+      retryDelay: config.retryDelay ?? 1000,
+      heartbeatInterval: config.heartbeatInterval ?? 30000,
+      heartbeatTimeout: config.heartbeatTimeout ?? 10000,
+      sessionPersistence: config.sessionPersistence ?? false,
+      sessionTimeout: config.sessionTimeout ?? 3600000, // 1 hour
+      onProgress: config.onProgress,
+      onConnectionStateChange: config.onConnectionStateChange,
+      onMessage: config.onMessage,
     };
   }
 
@@ -762,7 +764,7 @@ export abstract class BaseMCPClient implements IEnhancedMCPClient {
    */
   protected async handleElicitationNotification(notification: JSONRPCNotification): Promise<void> {
     if (notification.method === 'notifications/elicitation/request') {
-      const request = notification.params as ElicitationRequest;
+      const request = notification.params as unknown as ElicitationRequest;
       
       try {
         const response = await this.handleElicitationRequest(request);
@@ -771,7 +773,7 @@ export abstract class BaseMCPClient implements IEnhancedMCPClient {
         await this.sendMessage({
           jsonrpc: '2.0',
           method: 'elicitation/response',
-          params: response
+          params: response as any
         });
       } catch (error) {
         console.error('Failed to handle elicitation request:', error);
@@ -784,7 +786,7 @@ export abstract class BaseMCPClient implements IEnhancedMCPClient {
             id: request.id,
             action: ElicitationAction.Cancel,
             reason: error instanceof Error ? error.message : 'Unknown error'
-          }
+          } as any
         });
       }
     }
@@ -1007,6 +1009,34 @@ export interface ClientConfig {
 }
 
 /**
+ * Internal configuration with all required properties
+ */
+interface InternalClientConfig {
+  // Connection settings
+  timeout: number;
+  retries: number;
+  debug: boolean;
+  
+  // Auto-reconnection settings
+  autoReconnect: boolean;
+  maxRetries: number;
+  retryDelay: number;
+  
+  // Heartbeat settings
+  heartbeatInterval: number;
+  heartbeatTimeout: number;
+  
+  // Progress tracking
+  onProgress?: ProgressCallback;
+  onConnectionStateChange?: ConnectionStateCallback;
+  onMessage?: MessageCallback;
+  
+  // Session management
+  sessionPersistence: boolean;
+  sessionTimeout: number;
+}
+
+/**
  * Utility function to create a cancellation token
  */
 export function createCancellationToken(): CancellationToken {
@@ -1157,24 +1187,4 @@ export interface MCPClientFactory<TConfig extends ClientConfig = ClientConfig> {
   createAndConnect(config: TConfig): Promise<IMCPClient>;
 }
 
-// Export all types and classes
-export {
-  ConnectionState,
-  ElicitationAction,
-  type ProgressCallback,
-  type ConnectionStateCallback,
-  type MessageCallback,
-  type CancellationToken,
-  type CallOptions,
-  type ServerConfig,
-  type SessionContext,
-  type IEnhancedMCPClient,
-  type IMultiServerMCPClient,
-  type ElicitationFieldType,
-  type ElicitationField,
-  type ElicitationRequest,
-  type ElicitationResponse,
-  type ElicitationHandler,
-  type ElicitationValidationError,
-  type ElicitationContext
-};
+// All types and classes are already exported where they are defined

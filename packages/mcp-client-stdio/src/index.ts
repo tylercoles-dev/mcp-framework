@@ -3,7 +3,9 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { 
   CallToolResult, 
   GetPromptResult,
-  ReadResourceResult
+  ReadResourceResult,
+  JSONRPCMessage,
+  JSONRPCResponse
 } from "@modelcontextprotocol/sdk/types.js";
 import { 
   BaseMCPClient, 
@@ -11,7 +13,8 @@ import {
   ToolInfo, 
   ResourceInfo, 
   PromptInfo,
-  MCPClientFactory
+  MCPClientFactory,
+  ConnectionState
 } from "@tylercoles/mcp-client";
 
 /**
@@ -31,9 +34,11 @@ export interface StdioClientConfig extends ClientConfig {
 export class StdioMCPClient extends BaseMCPClient {
   private client: Client;
   private transport: StdioClientTransport;
+  private stdioConfig: StdioClientConfig;
 
-  constructor(private config: StdioClientConfig) {
-    super();
+  constructor(config: StdioClientConfig) {
+    super(config);
+    this.stdioConfig = config;
     this.transport = new StdioClientTransport({
       command: config.command,
       args: config.args || [],
@@ -51,31 +56,33 @@ export class StdioMCPClient extends BaseMCPClient {
    * Connect to the MCP server
    */
   async connect(): Promise<void> {
-    if (this.connected) {
+    if (this.isConnected()) {
       throw new Error("Client is already connected");
     }
 
     await this.client.connect(this.transport);
-    this.connected = true;
+    this.setConnectionState(ConnectionState.Connected);
   }
 
   /**
    * Disconnect from the MCP server
    */
   async disconnect(): Promise<void> {
-    if (!this.connected) {
+    if (!this.isConnected()) {
       return;
     }
 
     await this.client.close();
-    this.connected = false;
+    this.setConnectionState(ConnectionState.Disconnected);
   }
 
   /**
    * List all available tools
    */
   async listTools(): Promise<ToolInfo[]> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.listTools();
     return result.tools.map(tool => ({
       name: tool.name,
@@ -86,10 +93,12 @@ export class StdioMCPClient extends BaseMCPClient {
   }
 
   /**
-   * Call a tool with arguments
+   * Call a tool with arguments (implementation for doCallTool)
    */
-  async callTool(name: string, args?: any): Promise<CallToolResult> {
-    this.ensureConnected();
+  protected async doCallTool(name: string, args?: any): Promise<CallToolResult> {
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.callTool({
       name,
       arguments: args || {}
@@ -101,7 +110,9 @@ export class StdioMCPClient extends BaseMCPClient {
    * List all available resources
    */
   async listResources(): Promise<ResourceInfo[]> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.listResources();
     return result.resources.map(resource => ({
       uri: resource.uri,
@@ -115,7 +126,9 @@ export class StdioMCPClient extends BaseMCPClient {
    * Read a resource by URI
    */
   async readResource(uri: string): Promise<ReadResourceResult> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     return await this.client.readResource({ uri });
   }
 
@@ -123,7 +136,9 @@ export class StdioMCPClient extends BaseMCPClient {
    * List all available prompts
    */
   async listPrompts(): Promise<PromptInfo[]> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.listPrompts();
     return result.prompts.map(prompt => ({
       name: prompt.name,
@@ -137,7 +152,9 @@ export class StdioMCPClient extends BaseMCPClient {
    * Get a prompt with arguments
    */
   async getPrompt(name: string, args?: any): Promise<GetPromptResult> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     return await this.client.getPrompt({
       name,
       arguments: args || {}
@@ -149,6 +166,26 @@ export class StdioMCPClient extends BaseMCPClient {
    */
   getSDKClient(): Client {
     return this.client;
+  }
+
+  /**
+   * Send a JSON-RPC message directly
+   */
+  async sendMessage(message: JSONRPCMessage): Promise<JSONRPCResponse | void> {
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
+    // For stdio transport, we don't have direct message sending capability
+    // This would need to be implemented based on the actual transport API
+    throw new Error("Direct message sending not supported for stdio transport");
+  }
+
+  /**
+   * Send heartbeat ping
+   */
+  protected async sendHeartbeat(): Promise<void> {
+    // Stdio transport doesn't typically need heartbeat
+    // This is a no-op for stdio clients
   }
 }
 

@@ -88,7 +88,9 @@ async function main() {
       url: AUTHENTIK_URL,
       clientId: CLIENT_ID,
       applicationSlug: CLIENT_ID,
-      redirectUri: `http://localhost:${PORT}/auth/callback`
+      redirectUri: `http://localhost:${PORT}/auth/callback`,
+      authorizationFlowId: 'default-authorization-flow',
+      invalidationFlowId: 'default-invalidation-flow'
     }),
     cors: {
       origin: true // Allow all origins in development

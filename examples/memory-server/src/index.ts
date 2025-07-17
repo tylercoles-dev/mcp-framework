@@ -41,7 +41,9 @@ class Application {
         applicationSlug: 'claude-ai-mcp',
         allowedGroups: config.auth.allowedGroups,
         redirectUri: config.auth.redirectUri,
-        sessionSecret: config.sessionSecret
+        sessionSecret: config.sessionSecret,
+        authorizationFlowId: 'default-authorization-flow',
+        invalidationFlowId: 'default-invalidation-flow'
       }),
       cors: {
         origin: (origin, callback) => {

@@ -3,7 +3,9 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { 
   CallToolResult, 
   GetPromptResult,
-  ReadResourceResult
+  ReadResourceResult,
+  JSONRPCMessage,
+  JSONRPCResponse
 } from "@modelcontextprotocol/sdk/types.js";
 import { 
   BaseMCPClient, 
@@ -11,7 +13,8 @@ import {
   ToolInfo, 
   ResourceInfo, 
   PromptInfo,
-  MCPClientFactory
+  MCPClientFactory,
+  ConnectionState
 } from "@tylercoles/mcp-client";
 
 /**
@@ -29,9 +32,11 @@ export interface HttpClientConfig extends ClientConfig {
 export class HttpMCPClient extends BaseMCPClient {
   private client: Client;
   private transport: StreamableHTTPClientTransport;
+  private httpConfig: HttpClientConfig;
 
-  constructor(private config: HttpClientConfig) {
-    super();
+  constructor(config: HttpClientConfig) {
+    super(config);
+    this.httpConfig = config;
     this.transport = new StreamableHTTPClientTransport(
       new URL(config.url)
     );
@@ -46,31 +51,33 @@ export class HttpMCPClient extends BaseMCPClient {
    * Connect to the MCP server
    */
   async connect(): Promise<void> {
-    if (this.connected) {
+    if (this.isConnected()) {
       throw new Error("Client is already connected");
     }
 
     await this.client.connect(this.transport);
-    this.connected = true;
+    this.setConnectionState(ConnectionState.Connected);
   }
 
   /**
    * Disconnect from the MCP server
    */
   async disconnect(): Promise<void> {
-    if (!this.connected) {
+    if (!this.isConnected()) {
       return;
     }
 
     await this.client.close();
-    this.connected = false;
+    this.setConnectionState(ConnectionState.Disconnected);
   }
 
   /**
    * List all available tools
    */
   async listTools(): Promise<ToolInfo[]> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.listTools();
     return result.tools.map(tool => ({
       name: tool.name,
@@ -81,10 +88,12 @@ export class HttpMCPClient extends BaseMCPClient {
   }
 
   /**
-   * Call a tool with arguments
+   * Call a tool with arguments (implementation for doCallTool)
    */
-  async callTool(name: string, args?: any): Promise<CallToolResult> {
-    this.ensureConnected();
+  protected async doCallTool(name: string, args?: any): Promise<CallToolResult> {
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.callTool({
       name,
       arguments: args || {}
@@ -96,7 +105,9 @@ export class HttpMCPClient extends BaseMCPClient {
    * List all available resources
    */
   async listResources(): Promise<ResourceInfo[]> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.listResources();
     return result.resources.map(resource => ({
       uri: resource.uri,
@@ -110,7 +121,9 @@ export class HttpMCPClient extends BaseMCPClient {
    * Read a resource by URI
    */
   async readResource(uri: string): Promise<ReadResourceResult> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     return await this.client.readResource({ uri });
   }
 
@@ -118,7 +131,9 @@ export class HttpMCPClient extends BaseMCPClient {
    * List all available prompts
    */
   async listPrompts(): Promise<PromptInfo[]> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     const result = await this.client.listPrompts();
     return result.prompts.map(prompt => ({
       name: prompt.name,
@@ -132,7 +147,9 @@ export class HttpMCPClient extends BaseMCPClient {
    * Get a prompt with arguments
    */
   async getPrompt(name: string, args?: any): Promise<GetPromptResult> {
-    this.ensureConnected();
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
     return await this.client.getPrompt({
       name,
       arguments: args || {}
@@ -147,10 +164,30 @@ export class HttpMCPClient extends BaseMCPClient {
   }
 
   /**
+   * Send a JSON-RPC message directly
+   */
+  async sendMessage(message: JSONRPCMessage): Promise<JSONRPCResponse | void> {
+    if (!this.isConnected()) {
+      throw new Error("Client is not connected");
+    }
+    // For HTTP transport, we don't have direct message sending capability
+    // This would need to be implemented based on the actual transport API
+    throw new Error("Direct message sending not supported for HTTP transport");
+  }
+
+  /**
+   * Send heartbeat ping
+   */
+  protected async sendHeartbeat(): Promise<void> {
+    // HTTP transport doesn't typically need heartbeat
+    // This is a no-op for HTTP clients
+  }
+
+  /**
    * Get the server URL
    */
   getServerUrl(): string {
-    return this.config.url;
+    return this.httpConfig.url;
   }
 }
 
