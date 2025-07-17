@@ -40,199 +40,199 @@ async function createKanbanServer() {
 
   // Setup tools
   const kanbanTools = new KanbanTools(db);
-  kanbanTools.getTools().forEach(tool => {
-    server.addTool(tool);
-  });
+  kanbanTools.registerTools(server);
 
   // Add resources for board data access
-  server.addResource({
-    uri: 'kanban://boards',
-    name: 'All Boards',
+  server.registerResource('all-boards', 'kanban://boards', {
+    title: 'All Boards',
     description: 'List of all kanban boards',
     mimeType: 'application/json',
-    handler: async () => {
-      const boards = await db.getBoards();
-      return {
+  }, async () => {
+    const boards = await db.getBoards();
+    return {
+      contents: [{
         uri: 'kanban://boards',
         mimeType: 'application/json',
         text: JSON.stringify(boards, null, 2),
-      };
-    },
+      }]
+    };
   });
 
-  server.addResource({
-    uri: 'kanban://board/{board_id}',
-    name: 'Board Details',
+  server.registerResourceTemplate('board-details', 'kanban://board/{board_id}', {
+    title: 'Board Details',
     description: 'Detailed information about a specific board',
     mimeType: 'application/json',
-    handler: async (uri) => {
-      const match = uri.match(/kanban:\/\/board\/(\d+)/);
-      if (!match) {
-        throw new Error('Invalid board URI format');
-      }
-      
-      const boardId = parseInt(match[1]);
-      const board = await db.getBoardById(boardId);
-      if (!board) {
-        throw new Error(`Board ${boardId} not found`);
-      }
+  }, async (uri: any) => {
+    const match = uri.match(/kanban:\/\/board\/(\d+)/);
+    if (!match) {
+      throw new Error('Invalid board URI format');
+    }
+    
+    const boardId = parseInt(match[1]);
+    const board = await db.getBoardById(boardId);
+    if (!board) {
+      throw new Error(`Board ${boardId} not found`);
+    }
 
-      const columns = await db.getColumnsByBoard(boardId);
-      const boardData = {
-        board,
-        columns: await Promise.all(
-          columns.map(async (column) => {
-            const cards = await db.getCardsByColumn(column.id);
-            const cardsWithTags = await Promise.all(
-              cards.map(async (card) => {
-                const tags = await db.getCardTags(card.id);
-                return { ...card, tags };
-              })
-            );
-            return { ...column, cards: cardsWithTags };
-          })
-        ),
-      };
+    const columns = await db.getColumnsByBoard(boardId);
+    const boardData = {
+      board,
+      columns: await Promise.all(
+        columns.map(async (column) => {
+          const cards = await db.getCardsByColumn(column.id!);
+          const cardsWithTags = await Promise.all(
+            cards.map(async (card) => {
+              const tags = await db.getCardTags(card.id!);
+              return { ...card, tags };
+            })
+          );
+          return { ...column, cards: cardsWithTags };
+        })
+      ),
+    };
 
-      return {
+    return {
+      contents: [{
         uri,
         mimeType: 'application/json',
         text: JSON.stringify(boardData, null, 2),
-      };
-    },
+      }]
+    };
   });
 
-  server.addResource({
-    uri: 'kanban://stats',
-    name: 'Kanban Statistics',
+  server.registerResource('kanban-stats', 'kanban://stats', {
+    title: 'Kanban Statistics',
     description: 'Analytics and statistics for the kanban system',
     mimeType: 'application/json',
-    handler: async () => {
-      const boards = await db.getBoards();
-      const allCards = await Promise.all(
-        boards.map(board => db.getCardsByBoard(board.id))
-      ).then(cardArrays => cardArrays.flat());
+  }, async () => {
+    const boards = await db.getBoards();
+    const allCards = await Promise.all(
+      boards.map(board => db.getCardsByBoard(board.id!))
+    ).then(cardArrays => cardArrays.flat());
 
-      const cardsByPriority = allCards.reduce(
-        (acc, card) => {
-          acc[card.priority] = (acc[card.priority] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
+    const cardsByPriority = allCards.reduce(
+      (acc, card) => {
+        acc[card.priority] = (acc[card.priority] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
 
-      const today = new Date().toISOString().split('T')[0];
-      const overdueCards = allCards.filter(
-        card => card.due_date && card.due_date < today
-      ).length;
+    const today = new Date().toISOString().split('T')[0];
+    const overdueCards = allCards.filter(
+      card => card.due_date && card.due_date < today
+    ).length;
 
-      const stats = {
-        total_boards: boards.length,
-        total_cards: allCards.length,
-        cards_by_priority: cardsByPriority,
-        overdue_cards: overdueCards,
-        generated_at: new Date().toISOString(),
-      };
+    const stats = {
+      total_boards: boards.length,
+      total_cards: allCards.length,
+      cards_by_priority: cardsByPriority,
+      overdue_cards: overdueCards,
+      generated_at: new Date().toISOString(),
+    };
 
-      return {
+    return {
+      contents: [{
         uri: 'kanban://stats',
         mimeType: 'application/json',
         text: JSON.stringify(stats, null, 2),
-      };
-    },
+      }]
+    };
   });
 
   // Add prompts for common workflows
-  server.addPrompt({
-    name: 'create_project_board',
+  server.registerPrompt('create_project_board', {
     title: 'Create Project Board',
     description: 'Create a new project board with standard columns',
-    arguments: [
-      {
-        name: 'project_name',
-        description: 'Name of the project',
-        required: true,
+    argsSchema: {
+      type: 'object',
+      properties: {
+        project_name: {
+          type: 'string',
+          description: 'Name of the project'
+        },
+        description: {
+          type: 'string',
+          description: 'Project description'
+        }
       },
-      {
-        name: 'description',
-        description: 'Project description',
-        required: false,
-      },
-    ],
-    handler: async (args) => {
-      const { project_name, description } = args;
-      return {
-        messages: [
-          {
-            role: 'user',
-            content: {
-              type: 'text',
-              text: `Please create a new kanban board for the project "${project_name}"${description ? ` with description: ${description}` : ''}. After creating the board, add the standard columns: "To Do", "In Progress", "Review", and "Done". Use appropriate colors for each column.`,
-            },
-          },
-        ],
-      };
+      required: ['project_name']
     },
+  }, (args: any) => {
+    const { project_name, description } = args;
+    return {
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `Please create a new kanban board for the project "${project_name}"${description ? ` with description: ${description}` : ''}. After creating the board, add the standard columns: "To Do", "In Progress", "Review", and "Done". Use appropriate colors for each column.`,
+          },
+        },
+      ],
+    };
   });
 
-  server.addPrompt({
-    name: 'daily_standup',
+  server.registerPrompt('daily_standup', {
     title: 'Daily Standup Report',
     description: 'Generate a daily standup report for a board',
-    arguments: [
-      {
-        name: 'board_id',
-        description: 'ID of the board to report on',
-        required: true,
+    argsSchema: {
+      type: 'object',
+      properties: {
+        board_id: {
+          type: 'string',
+          description: 'ID of the board to report on'
+        }
       },
-    ],
-    handler: async (args) => {
-      const { board_id } = args;
-      return {
-        messages: [
-          {
-            role: 'user',
-            content: {
-              type: 'text',
-              text: `Generate a daily standup report for board ${board_id}. Include:
+      required: ['board_id']
+    },
+  }, (args: any) => {
+    const { board_id } = args;
+    return {
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `Generate a daily standup report for board ${board_id}. Include:
 1. Cards completed yesterday (moved to "Done" column)
 2. Cards in progress today ("In Progress" column)
 3. Any blocked or overdue cards
 4. Summary of team workload and priorities
 
 Please use the get_board tool to fetch the current board state and analyze the data.`,
-            },
           },
-        ],
-      };
-    },
+        },
+      ],
+    };
   });
 
-  server.addPrompt({
-    name: 'sprint_planning',
+  server.registerPrompt('sprint_planning', {
     title: 'Sprint Planning Assistant',
     description: 'Help with sprint planning based on board state',
-    arguments: [
-      {
-        name: 'board_id',
-        description: 'ID of the board for sprint planning',
-        required: true,
+    argsSchema: {
+      type: 'object',
+      properties: {
+        board_id: {
+          type: 'string',
+          description: 'ID of the board for sprint planning'
+        },
+        sprint_capacity: {
+          type: 'string',
+          description: 'Team capacity for the sprint (story points or hours)'
+        }
       },
-      {
-        name: 'sprint_capacity',
-        description: 'Team capacity for the sprint (story points or hours)',
-        required: false,
-      },
-    ],
-    handler: async (args) => {
-      const { board_id, sprint_capacity } = args;
-      return {
-        messages: [
-          {
-            role: 'user',
-            content: {
-              type: 'text',
-              text: `Help me plan the next sprint for board ${board_id}. Please:
+      required: ['board_id']
+    },
+  }, (args: any) => {
+    const { board_id, sprint_capacity } = args;
+    return {
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `Help me plan the next sprint for board ${board_id}. Please:
 1. Get the current board state and analyze the backlog
 2. Suggest which cards should be prioritized based on priority levels and due dates
 3. Identify any dependencies or blockers
@@ -240,11 +240,10 @@ Please use the get_board tool to fetch the current board state and analyze the d
 5. Highlight any cards that need more detail or clarification
 
 Use the kanban tools to analyze the current state and provide recommendations.`,
-            },
           },
-        ],
-      };
-    },
+        },
+      ],
+    };
   });
 
   // Setup HTTP transport

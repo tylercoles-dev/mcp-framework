@@ -1,4 +1,4 @@
-import { Kysely, sql, Insertable } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { SqliteDialect } from 'kysely';
 import { PostgresDialect } from 'kysely';
 import { MysqlDialect } from 'kysely';
@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Database schema types
 export interface Board {
-  id: number;
+  id?: number;
   name: string;
   description: string | null;
   created_at: string;
@@ -22,7 +22,7 @@ export interface Board {
 }
 
 export interface Column {
-  id: number;
+  id?: number;
   board_id: number;
   name: string;
   position: number;
@@ -31,7 +31,7 @@ export interface Column {
 }
 
 export interface Card {
-  id: number;
+  id?: number;
   board_id: number;
   column_id: number;
   title: string;
@@ -45,7 +45,7 @@ export interface Card {
 }
 
 export interface Tag {
-  id: number;
+  id?: number;
   name: string;
   color: string;
   created_at: string;
@@ -57,7 +57,7 @@ export interface CardTag {
 }
 
 export interface Comment {
-  id: number;
+  id?: number;
   card_id: number;
   content: string;
   author: string | null;
@@ -172,20 +172,18 @@ export class KanbanDatabase {
       .executeTakeFirst();
   }
 
-  async createBoard(board: Omit<Board, 'id' | 'created_at' | 'updated_at'>): Promise<Board> {
-    const insertData: Insertable<Board> = {
-      ...board,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    
+  async createBoard(board: Omit<Board, 'id' | 'created_at' | 'updated_at'>): Promise<Board & { id: number }> {
     const result = await this.db
       .insertInto('boards')
-      .values(insertData)
+      .values({
+        ...board,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
     
-    return result;
+    return result as Board & { id: number };
   }
 
   async updateBoard(id: number, updates: Partial<Omit<Board, 'id' | 'created_at'>>): Promise<Board | undefined> {
@@ -221,19 +219,17 @@ export class KanbanDatabase {
       .execute();
   }
 
-  async createColumn(column: Omit<Column, 'id' | 'created_at'>): Promise<Column> {
-    const insertData: Insertable<Column> = {
-      ...column,
-      created_at: new Date().toISOString(),
-    };
-    
+  async createColumn(column: Omit<Column, 'id' | 'created_at'>): Promise<Column & { id: number }> {
     const result = await this.db
       .insertInto('columns')
-      .values(insertData)
+      .values({
+        ...column,
+        created_at: new Date().toISOString(),
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
     
-    return result;
+    return result as Column & { id: number };
   }
 
   async updateColumn(id: number, updates: Partial<Omit<Column, 'id' | 'created_at'>>): Promise<Column | undefined> {
@@ -283,20 +279,18 @@ export class KanbanDatabase {
       .executeTakeFirst();
   }
 
-  async createCard(card: Omit<Card, 'id' | 'created_at' | 'updated_at'>): Promise<Card> {
-    const insertData: Insertable<Card> = {
-      ...card,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    
+  async createCard(card: Omit<Card, 'id' | 'created_at' | 'updated_at'>): Promise<Card & { id: number }> {
     const result = await this.db
       .insertInto('cards')
-      .values(insertData)
+      .values({
+        ...card,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
     
-    return result;
+    return result as Card & { id: number };
   }
 
   async updateCard(id: number, updates: Partial<Omit<Card, 'id' | 'created_at'>>): Promise<Card | undefined> {
@@ -360,19 +354,17 @@ export class KanbanDatabase {
     return Number(result.numDeletedRows) > 0;
   }
 
-  async createTag(tag: Omit<Tag, 'id' | 'created_at'>): Promise<Tag> {
-    const insertData: Insertable<Tag> = {
-      ...tag,
-      created_at: new Date().toISOString(),
-    };
-    
+  async createTag(tag: Omit<Tag, 'id' | 'created_at'>): Promise<Tag & { id: number }> {
     const result = await this.db
       .insertInto('tags')
-      .values(insertData)
+      .values({
+        ...tag,
+        created_at: new Date().toISOString(),
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
     
-    return result;
+    return result as Tag & { id: number };
   }
 
   // Comment operations
@@ -385,19 +377,17 @@ export class KanbanDatabase {
       .execute();
   }
 
-  async addComment(comment: Omit<Comment, 'id' | 'created_at'>): Promise<Comment> {
-    const insertData: Insertable<Comment> = {
-      ...comment,
-      created_at: new Date().toISOString(),
-    };
-    
+  async addComment(comment: Omit<Comment, 'id' | 'created_at'>): Promise<Comment & { id: number }> {
     const result = await this.db
       .insertInto('comments')
-      .values(insertData)
+      .values({
+        ...comment,
+        created_at: new Date().toISOString(),
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
     
-    return result;
+    return result as Comment & { id: number };
   }
 
   async deleteComment(id: number): Promise<boolean> {
