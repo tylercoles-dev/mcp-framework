@@ -104,7 +104,7 @@ export class MCPErrorFactory {
     return new MCPErrorClass(
       MCPErrorCode.InvalidParams,
       message,
-      details ? { type: 'invalid_params', details } : undefined
+      { type: 'invalid_params', ...(details && { details }) }
     );
   }
 

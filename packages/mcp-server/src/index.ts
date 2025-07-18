@@ -2112,7 +2112,23 @@ export class MCPServer {
    * Validate if a URI template format is valid
    */
   private isValidUriTemplate(uriTemplate: string): boolean {
-    // Basic URI template validation - checks for balanced braces
+    // Check for balanced braces first
+    let braceCount = 0;
+    for (const char of uriTemplate) {
+      if (char === '{') {
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+        if (braceCount < 0) {
+          return false; // More closing braces than opening
+        }
+      }
+    }
+    if (braceCount !== 0) {
+      return false; // Unmatched braces
+    }
+
+    // Check for properly formatted variables
     const bracePattern = /\{([^}]+)\}/g;
     const matches = uriTemplate.match(bracePattern);
     

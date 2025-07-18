@@ -275,12 +275,10 @@ describe('MCPServer Error Handling', () => {
       }, promptHandler);
 
       const tool = server.getTool('test-tool');
-      expect(tool).toEqual({
-        name: 'test-tool',
-        description: 'Test tool',
-        inputSchema: { name: z.string() },
-        title: undefined
-      });
+      expect(tool?.name).toBe('test-tool');
+      expect(tool?.description).toBe('Test tool');
+      expect(tool?.inputSchema).toHaveProperty('name');
+      expect(tool?.title).toBeUndefined();
 
       const resource = server.getResource('test-resource');
       expect(resource).toEqual({

@@ -2,15 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MCPServer, MCPErrorFactory, MCPErrorCode } from '../src/index.js';
 import type { ResourceTemplateConfig, ResourceTemplateHandler } from '../src/index.js';
 
-// Mock the SDK server
-vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
-  McpServer: vi.fn().mockImplementation(() => ({
-    registerTool: vi.fn(),
-    registerResource: vi.fn(),
-    registerPrompt: vi.fn(),
-    notification: vi.fn()
-  }))
-}));
+// SDK server is mocked globally in setup.ts
 
 describe('Resource Template System', () => {
   let server: MCPServer;
@@ -289,6 +281,10 @@ describe('Resource Template System', () => {
 
     beforeEach(() => {
       server = new MCPServer({ name: 'test', version: '1.0.0' });
+      mockSDKServer = server.getSDKServer();
+      // Clear any calls from server initialization
+      vi.clearAllMocks();
+      
       templateHandler = vi.fn().mockResolvedValue({
         contents: [{ uri: 'test', text: 'content' }]
       });
@@ -305,8 +301,17 @@ describe('Resource Template System', () => {
       // We need to test parameter extraction through the handler wrapper
       // by triggering it with the SDK server registration
       
+      // Verify that registerResource was called
+      expect(mockSDKServer.registerResource).toHaveBeenCalled();
+      
       // Get the registered handler from the SDK server mock
-      const registeredHandler = mockSDKServer.registerResource.mock.calls[0][3];
+      const calls = mockSDKServer.registerResource.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[0]).toBeDefined();
+      expect(calls[0].length).toBeGreaterThan(3);
+      
+      const registeredHandler = calls[0][3];
+      expect(typeof registeredHandler).toBe('function');
       
       // Call the wrapped handler with a matching URI
       const testUri = new URL('file:///users/123/documents/test.txt');
