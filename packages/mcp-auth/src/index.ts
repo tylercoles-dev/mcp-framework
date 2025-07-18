@@ -183,16 +183,18 @@ export abstract class OAuthProvider extends AuthProvider {
   
   /**
    * Optional: Refresh an access token
+   * Override this method in subclasses to support token refresh
    */
   async refreshToken?(refreshToken: string, resource?: string): Promise<TokenResult> {
-    throw new Error('Token refresh not implemented');
+    throw new Error(`Token refresh not implemented by ${this.constructor.name}. Override this method to support token refresh.`);
   }
   
   /**
    * Optional: Handle dynamic client registration
+   * Override this method in subclasses to support dynamic client registration
    */
   async registerClient?(request: ClientRegistrationRequest): Promise<ClientRegistrationResponse> {
-    throw new Error('Dynamic client registration not implemented');
+    throw new Error(`Dynamic client registration not implemented by ${this.constructor.name}. Override this method to support dynamic client registration.`);
   }
   
   /**

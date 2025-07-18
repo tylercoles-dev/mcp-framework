@@ -190,9 +190,43 @@ describe('AuthentikAuth', () => {
       expect(response.body).toEqual({ success: true });
     });
 
-    // Skip test for uninitialized state as it's difficult to simulate with mocked passport
-    it.skip('should return 503 when not initialized', async () => {
-      // This test is skipped because the passport mock immediately completes initialization
+    it('should return 503 when not initialized', async () => {
+      // Create a new instance that we can control the initialization state
+      const uninitializedAuth = new AuthentikAuth({
+        url: 'https://auth.example.com',
+        clientId: 'test-client',
+        authorizationFlowId: 'test-flow',
+        invalidationFlowId: 'test-invalidation',
+        scopes: ['openid', 'profile', 'email'],
+        redirectUri: 'http://localhost:3000/auth/callback',
+        sessionSecret: 'test-secret'
+      });
+      
+      // Mock the initialize method to prevent automatic initialization
+      const originalInitialize = uninitializedAuth.initialize;
+      uninitializedAuth.initialize = vi.fn().mockResolvedValue(undefined);
+      
+      // Set the initialized flag to false manually
+      (uninitializedAuth as any).passportInitialized = false;
+      
+      const testApp = express();
+      testApp.use(express.json());
+      
+      const testRouter = express.Router();
+      uninitializedAuth.setupRoutes(testRouter);
+      testApp.use(testRouter);
+      
+      const response = await request(testApp)
+        .get('/auth/login')
+        .expect(503);
+      
+      expect(response.body).toMatchObject({
+        error: 'temporarily_unavailable',
+        error_description: 'Authentication system initializing'
+      });
+      
+      // Restore original method
+      uninitializedAuth.initialize = originalInitialize;
     });
   });
 

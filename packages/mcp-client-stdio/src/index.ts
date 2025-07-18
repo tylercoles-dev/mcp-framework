@@ -7,6 +7,7 @@ import {
   JSONRPCMessage,
   JSONRPCResponse
 } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import { 
   BaseMCPClient, 
   ClientConfig, 
@@ -175,9 +176,35 @@ export class StdioMCPClient extends BaseMCPClient {
     if (!this.isConnected()) {
       throw new Error("Client is not connected");
     }
-    // For stdio transport, we don't have direct message sending capability
-    // This would need to be implemented based on the actual transport API
-    throw new Error("Direct message sending not supported for stdio transport");
+    
+    // Handle notifications (no id field)
+    if (!('id' in message) || message.id === undefined) {
+      await this.client.notification(message as any);
+      return;
+    }
+    
+    // For requests, we need to create a schema for the expected response
+    // Since we don't know the exact response structure, we'll use a generic schema
+    const responseSchema = z.object({}).passthrough(); // Allow any additional properties
+    
+    try {
+      const response = await this.client.request(message as any, responseSchema);
+      return {
+        jsonrpc: '2.0',
+        id: message.id,
+        result: response
+      };
+    } catch (error) {
+      // Return error response
+      return {
+        jsonrpc: '2.0',
+        id: message.id,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : 'Unknown error'
+        }
+      } as any; // JSONRPCResponse can be either success or error
+    }
   }
 
   /**

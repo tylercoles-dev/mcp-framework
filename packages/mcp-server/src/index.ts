@@ -2255,13 +2255,19 @@ export class MCPServer {
         argument: z.object({
           name: z.string(),
           value: z.string()
-        })
+        }),
+        context: z.object({
+          arguments: z.record(z.string()).optional()
+        }).optional()
       })
     });
 
-    // TODO: Register completion handler with SDK server
-    // The SDK server doesn't have a setRequestHandler method
-    // This needs to be implemented properly based on the actual SDK API
+    // Register completion handler with SDK server
+    if (this.sdkServer.setRequestHandler) {
+      this.sdkServer.setRequestHandler(CompletionRequestSchema, async (request: any) => {
+        return await this.handleCompletion(request.params, this.config.propagateErrors);
+      });
+    }
   }
 
   /**
