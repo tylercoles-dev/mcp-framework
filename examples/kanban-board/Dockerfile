@@ -38,8 +38,8 @@ CMD ["npm", "run", "dev"]
 FROM base AS build
 
 # Install production dependencies first
-RUN npm i --only=production && npm cache clean --force
-RUN cd frontend && npm i --only=production && npm cache clean --force
+RUN npm i  && npm cache clean --force
+RUN cd frontend && npm i  && npm cache clean --force
 
 # Copy source code
 COPY . .

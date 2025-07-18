@@ -152,10 +152,30 @@ export class KanbanDatabase {
     const statements = schema
       .split(';')
       .map(s => s.trim())
-      .filter(s => s.length > 0);
+      .filter(s => s.length > 0 && !s.match(/^\s*$/))
+      .filter(s => {
+        // Filter out pure comment blocks, but keep statements that contain SQL
+        const lines = s.split('\n').filter(line => line.trim().length > 0);
+        return lines.some(line => !line.trim().startsWith('--') && line.trim().length > 0);
+      });
 
-    for (const statement of statements) {
-      await sql`${sql.raw(statement)}`.execute(this.db);
+    console.log(`Found ${statements.length} SQL statements to execute`);
+    statements.forEach((stmt, idx) => {
+      console.log(`Statement ${idx + 1}: ${stmt.substring(0, 100)}...`);
+    });
+    
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i];
+      if (statement.length > 0) {
+        console.log(`Executing SQL ${i + 1}/${statements.length}: ${statement.substring(0, 50)}...`);
+        try {
+          await sql`${sql.raw(statement)}`.execute(this.db);
+        } catch (error) {
+          console.error(`Error executing statement ${i + 1}:`, error);
+          console.error(`Statement was: ${statement}`);
+          throw error;
+        }
+      }
     }
   }
 
