@@ -37,7 +37,7 @@
     "better-sqlite3": "^9.2.2",
     "pg": "^8.11.3",
     "mysql2": "^3.6.5",
-    "zod": "^3.22.4"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
@@ -45,10 +45,7 @@
     "@types/pg": "^8.10.9",
     "tsx": "^4.6.2",
     "typescript": "^5.3.3",
-    "concurrently": "^8.2.2",
-    "eslint": "^8.56.0",
-    "@typescript-eslint/eslint-plugin": "^6.16.0",
-    "@typescript-eslint/parser": "^6.16.0"
+    "concurrently": "^8.2.2"
   },
   "engines": {
     "node": ">=18.0.0"

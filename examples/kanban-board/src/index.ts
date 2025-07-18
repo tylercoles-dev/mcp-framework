@@ -2,8 +2,8 @@
 
 import { MCPServer } from '@tylercoles/mcp-server';
 import { HttpTransport } from '@tylercoles/mcp-transport-http';
-import { KanbanDatabase, DatabaseConfig } from './database/index.js';
-import { KanbanTools } from './tools/kanban-tools.js';
+import { KanbanDatabase, DatabaseConfig } from './database/index';
+import { KanbanTools } from './tools/kanban-tools';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -41,6 +41,21 @@ async function createKanbanServer() {
   // Setup tools
   const kanbanTools = new KanbanTools(db);
   kanbanTools.registerTools(server);
+
+  // Add a simple test tool to debug the issue
+  const { z } = await import('zod');
+  server.registerTool('test_simple', {
+    title: 'Simple Test Tool',
+    description: 'A simple test tool for debugging',
+    inputSchema: z.object({}),
+  }, async () => {
+    return {
+      content: [{
+        type: 'text',
+        text: 'Simple test successful'
+      }]
+    };
+  });
 
   // Add resources for board data access
   server.registerResource('all-boards', 'kanban://boards', {
@@ -250,6 +265,7 @@ Use the kanban tools to analyze the current state and provide recommendations.`,
   const httpTransport = new HttpTransport({
     port: config.port,
     host: config.host,
+    // enableJsonResponse is false by default, enabling SSE streaming
     cors: {
       origin: ['http://localhost:3000', 'http://localhost:5173'], // React dev servers
       credentials: true,
@@ -309,7 +325,6 @@ async function main() {
     process.exit(1);
   }
 }
+console.log(import.meta.url )
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
+main();

@@ -41,6 +41,7 @@ export interface HttpConfig {
   basePath?: string; // Base path for MCP endpoints (default: '/mcp')
   externalDomain?: string; // External domain for OAuth callbacks
   rateLimit?: HttpRateLimitConfig; // Rate limiting configuration
+  enableJsonResponse?: boolean; // Enable JSON responses instead of SSE streams
 }
 
 /**
@@ -224,6 +225,7 @@ export class HttpTransport implements Transport {
             },
             enableDnsRebindingProtection: this.config.enableDnsRebindingProtection,
             allowedHosts: this.config.allowedHosts,
+            enableJsonResponse: this.config.enableJsonResponse,
           });
 
           // Clean up transport when closed
