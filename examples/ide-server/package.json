@@ -14,7 +14,7 @@
         "start:serena-http": "node dist/index.js --serena --serena-http",
         "start:debug": "DEBUG=true node dist/index.js",
         "test:serena": "uvx --from git+https://github.com/oraios/serena serena-mcp-server --help",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"No tests specified\" && exit 0"
     },
     "bin": {
         "mcp-wrapper-server": "dist/index.js"

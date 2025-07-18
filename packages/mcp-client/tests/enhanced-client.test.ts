@@ -444,16 +444,27 @@ describe('Enhanced MCP Client', () => {
   });
 
   describe('Auto-reconnection', () => {
-    it('should attempt reconnection on error', (done) => {
+    it('should attempt reconnection on error', async () => {
+      // First connect the client so it can auto-reconnect
+      await client.connect();
+      
+      // Set up spy AFTER the initial connection
       const connectSpy = vi.spyOn(client, 'connect');
+      
+      // Reset the reconnect count to allow reconnection
+      (client as any).stats.reconnectCount = 0;
+      
+      // Ensure auto-reconnect is enabled
+      (client as any).config.autoReconnect = true;
+      (client as any).config.maxRetries = 3;
+      (client as any).config.retryDelay = 50; // Shorter delay for testing
       
       client.setConnectionStatePublic(ConnectionState.Error);
       
-      // Should schedule reconnection
-      setTimeout(() => {
-        expect(connectSpy).toHaveBeenCalled();
-        done();
-      }, 150); // Wait for retry delay
+      // Wait for reconnection attempt
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      expect(connectSpy).toHaveBeenCalled();
     });
 
     it('should respect max retry limit', async () => {

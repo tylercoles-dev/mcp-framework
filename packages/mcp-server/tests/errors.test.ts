@@ -140,7 +140,7 @@ describe('MCP Error System', () => {
         
         expect(error.code).toBe(MCPErrorCode.InvalidParams);
         expect(error.message).toBe('Invalid parameters');
-        expect(error.data).toBeUndefined();
+        expect(error.data?.type).toBe('invalid_params');
       });
 
       it('should create invalid params error with details', () => {

@@ -14,6 +14,14 @@ describe('Resource Template System', () => {
       version: '1.0.0'
     });
     mockSDKServer = server.getSDKServer();
+    
+    // Ensure all SDK server methods are spies
+    if (!vi.isMockFunction(mockSDKServer.registerResource)) {
+      mockSDKServer.registerResource = vi.fn();
+    }
+    if (!vi.isMockFunction(mockSDKServer.notification)) {
+      mockSDKServer.notification = vi.fn();
+    }
   });
 
   afterEach(() => {
@@ -282,6 +290,15 @@ describe('Resource Template System', () => {
     beforeEach(() => {
       server = new MCPServer({ name: 'test', version: '1.0.0' });
       mockSDKServer = server.getSDKServer();
+      
+      // Ensure all SDK server methods are spies
+      if (!vi.isMockFunction(mockSDKServer.registerResource)) {
+        mockSDKServer.registerResource = vi.fn();
+      }
+      if (!vi.isMockFunction(mockSDKServer.notification)) {
+        mockSDKServer.notification = vi.fn();
+      }
+      
       // Clear any calls from server initialization
       vi.clearAllMocks();
       
