@@ -42,6 +42,7 @@
   "exclude": [
     "dist/**/*.ts",
     "tests/**/*.ts",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "examples/**/*"
   ]
 }

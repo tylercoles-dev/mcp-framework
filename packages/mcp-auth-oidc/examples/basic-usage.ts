@@ -96,6 +96,7 @@ async function pkceExample() {
 
   // Generate PKCE parameters
   const pkceParams = {
+    codeVerifier: 'generated-code-verifier',
     codeChallenge: 'generated-code-challenge',
     codeChallengeMethod: 'S256' as const,
   };
