@@ -31,7 +31,7 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint --max-warnings 0 --cache --cache-location ../../../.eslintcache/mcp-auth-oidc.eslintcache .",
+    "lint": "eslint src/**/*.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

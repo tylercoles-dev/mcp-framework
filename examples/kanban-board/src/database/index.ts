@@ -2,7 +2,7 @@ import { Kysely, sql } from 'kysely';
 import { SqliteDialect } from 'kysely';
 import { PostgresDialect } from 'kysely';
 import { MysqlDialect } from 'kysely';
-import Database from 'better-sqlite3';
+import { default as SQLiteDb } from 'better-sqlite3';
 import { Pool } from 'pg';
 import { createPool } from 'mysql2';
 import fs from 'fs';
@@ -94,7 +94,7 @@ export class KanbanDatabase {
     switch (config.type) {
       case 'sqlite':
         dialect = new SqliteDialect({
-          database: new Database(config.filename || ':memory:'),
+          database: new SQLiteDb(config.filename || ':memory:'),
         });
         break;
 
@@ -147,7 +147,7 @@ export class KanbanDatabase {
     // Read and execute schema
     const schemaPath = path.join(__dirname, 'schema.sql');
     const schema = fs.readFileSync(schemaPath, 'utf-8');
-    
+
     // Split by statements and execute each
     const statements = schema
       .split(';')
@@ -182,7 +182,7 @@ export class KanbanDatabase {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
-    
+
     return result as Board & { id: number };
   }
 
@@ -196,7 +196,7 @@ export class KanbanDatabase {
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirst();
-    
+
     return result;
   }
 
@@ -205,7 +205,7 @@ export class KanbanDatabase {
       .deleteFrom('boards')
       .where('id', '=', id)
       .executeTakeFirst();
-    
+
     return Number(result.numDeletedRows) > 0;
   }
 
@@ -228,7 +228,7 @@ export class KanbanDatabase {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
-    
+
     return result as Column & { id: number };
   }
 
@@ -239,7 +239,7 @@ export class KanbanDatabase {
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirst();
-    
+
     return result;
   }
 
@@ -248,7 +248,7 @@ export class KanbanDatabase {
       .deleteFrom('columns')
       .where('id', '=', id)
       .executeTakeFirst();
-    
+
     return Number(result.numDeletedRows) > 0;
   }
 
@@ -289,7 +289,7 @@ export class KanbanDatabase {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
-    
+
     return result as Card & { id: number };
   }
 
@@ -303,7 +303,7 @@ export class KanbanDatabase {
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirst();
-    
+
     return result;
   }
 
@@ -319,7 +319,7 @@ export class KanbanDatabase {
       .deleteFrom('cards')
       .where('id', '=', id)
       .executeTakeFirst();
-    
+
     return Number(result.numDeletedRows) > 0;
   }
 
@@ -350,7 +350,7 @@ export class KanbanDatabase {
       .where('card_id', '=', cardId)
       .where('tag_id', '=', tagId)
       .executeTakeFirst();
-    
+
     return Number(result.numDeletedRows) > 0;
   }
 
@@ -363,7 +363,7 @@ export class KanbanDatabase {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
-    
+
     return result as Tag & { id: number };
   }
 
@@ -386,7 +386,7 @@ export class KanbanDatabase {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
-    
+
     return result as Comment & { id: number };
   }
 
@@ -395,7 +395,7 @@ export class KanbanDatabase {
       .deleteFrom('comments')
       .where('id', '=', id)
       .executeTakeFirst();
-    
+
     return Number(result.numDeletedRows) > 0;
   }
 

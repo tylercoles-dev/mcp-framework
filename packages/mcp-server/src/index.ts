@@ -1048,7 +1048,7 @@ export class MCPServer {
       structured: config.logging?.structured || false,
       includeTimestamp: config.logging?.includeTimestamp !== undefined ? config.logging.includeTimestamp : true,
       includeSource: config.logging?.includeSource || false,
-      maxMessageLength: config.logging?.hasOwnProperty('maxMessageLength') ? config.logging.maxMessageLength : 8192,
+      maxMessageLength: config.logging && 'maxMessageLength' in config.logging ? config.logging.maxMessageLength : 8192,
       loggers: new Map()
     };
 

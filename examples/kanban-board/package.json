@@ -12,7 +12,6 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx",
     "clean": "rm -rf dist",
     "db:migrate": "node -e \"import('./dist/database/index.js').then(m => new m.KanbanDatabase({ type: 'sqlite', filename: './kanban.db' }).initialize())\"",
     "frontend:install": "cd frontend && npm install",
