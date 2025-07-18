@@ -268,14 +268,14 @@ class PackagePublisher {
         return;
       }
 
-      // Run tests
-      if (!options.skipTests) {
-        await this.runTests();
-      }
-
       // Build packages
       if (!options.skipBuild) {
         await this.buildPackages();
+      }
+
+      // Run tests
+      if (!options.skipTests) {
+        await this.runTests();
       }
 
       // Publish packages in order
