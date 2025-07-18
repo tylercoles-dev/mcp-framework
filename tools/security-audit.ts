@@ -51,7 +51,7 @@ const sensitivePatterns: SecurityPattern[] = [
 const excludedDirs = ['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.turbo', 'examples'];
 const includedExtensions = ['.js', '.ts', '.tsx', '.json', '.env', '.yml', '.yaml', '.md', '.mjs', '.cjs'];
 
-let issuesFound: SecurityIssue[] = [];
+const issuesFound: SecurityIssue[] = [];
 let filesScanned = 0;
 
 /**

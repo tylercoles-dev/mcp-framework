@@ -66,7 +66,7 @@ async function verifyWorkspaces() {
     : rootPkg.workspaces.packages || [];
   
   console.log('✅ Workspaces configured:');
-  workspaceGlobs.forEach(ws => console.log(`   - ${ws}`));
+  workspaceGlobs.forEach((ws: any) => console.log(`   - ${ws}`));
   
   // Get all workspace packages
   console.log('\n📦 Detected workspace packages:');
