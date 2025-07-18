@@ -30,7 +30,7 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/tylercoles-dev/mcp-framework",
+        "url": "git+https://github.com/tylercoles-dev/mcp-framework.git",
         "directory": "packages/mcp-client-http"
     },
     "homepage": "https://github.com/tylercoles-dev/mcp-framework#readme",
