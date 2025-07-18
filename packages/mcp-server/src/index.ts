@@ -1,6 +1,6 @@
 import { ResourceMetadata, McpServer as SDKMcpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol";
-import { CallToolResult, ServerNotification, ServerRequest, CompleteRequestSchema, CreateMessageRequestSchema, CompleteResult, CreateMessageResult } from "@modelcontextprotocol/sdk/types";
+import { CallToolResult, ServerNotification, ServerRequest, CompleteRequestSchema, CreateMessageRequestSchema, CompleteResult, CreateMessageResult } from "@modelcontextprotocol/sdk/types.js";
 import { z, ZodRawShape, ZodTypeAny } from "zod";
 import { MCPErrorFactory, MCPErrorClass, MCPError, MCPErrorCode } from "./errors.js";
 
@@ -411,7 +411,7 @@ export type ToolHandler<InputArgs extends ZodRawShape> = (
 export interface ToolConfig<InputArgs extends ZodRawShape> {
   title?: string;
   description: string;
-  inputSchema: InputArgs; // Zod schema or plain object
+  inputSchema: z.ZodObject<InputArgs>; // Must be a Zod schema object
 }
 
 /**
@@ -606,7 +606,7 @@ export type ResourceHandler = (uri: URL, params?: any) => Promise<{
 export interface PromptConfig {
   title?: string;
   description?: string;
-  argsSchema?: any; // Zod schema or plain object
+  argsSchema?: any; // JSON schema object with properties structure
 }
 
 /**
@@ -1300,6 +1300,16 @@ export class MCPServer {
       throw MCPErrorFactory.invalidParams(`Tool '${name}' is already registered`);
     }
 
+    // Validate that inputSchema is a Zod schema object
+    if (!config.inputSchema || typeof config.inputSchema !== 'object') {
+      throw MCPErrorFactory.invalidParams('Tool inputSchema must be a Zod schema object');
+    }
+
+    // Check if it's a Zod schema by looking for Zod-specific properties
+    if (!('_def' in config.inputSchema) || !('shape' in config.inputSchema)) {
+      throw MCPErrorFactory.invalidParams('Tool inputSchema must be a Zod schema object, not a plain JSON schema. Use z.object({ ... }) instead.');
+    }
+
     // Track tool info
     this.tools.set(name, {
       name,
@@ -1309,9 +1319,10 @@ export class MCPServer {
     });
 
     // Create the tool config object for SDK
+    // The SDK expects a ZodRawShape (the shape object), not a complete Zod schema
     const toolConfig: any = {
       description: config.description,
-      inputSchema: config.inputSchema
+      inputSchema: config.inputSchema.shape
     };
     
     if (config.title) {
@@ -1432,7 +1443,7 @@ export class MCPServer {
       name,
       title: config.title,
       description: config.description,
-      arguments: config.argsSchema ? Object.keys(config.argsSchema) : []
+      arguments: config.argsSchema && config.argsSchema.properties ? Object.keys(config.argsSchema.properties) : []
     });
 
     // Create the prompt config object for SDK

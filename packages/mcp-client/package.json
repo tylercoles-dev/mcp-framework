@@ -37,7 +37,7 @@
     "url": "https://github.com/tylercoles-dev/mcp-framework/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.15.1"
+    "@modelcontextprotocol/sdk": "^1.16.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

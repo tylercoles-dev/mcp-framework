@@ -70,6 +70,49 @@ export const CreateCommentSchema = z.object({
 
 export type CreateCommentInput = z.infer<typeof CreateCommentSchema>;
 
+// Additional schemas for tools that need simple ID-based inputs
+export const BoardIdSchema = z.object({
+  board_id: z.number().int().positive(),
+});
+
+export const UpdateBoardWithIdSchema = z.object({
+  board_id: z.number().int().positive(),
+}).merge(UpdateBoardSchema);
+
+export const ColumnIdSchema = z.object({
+  column_id: z.number().int().positive(),
+});
+
+export const UpdateColumnWithIdSchema = z.object({
+  column_id: z.number().int().positive(),
+}).merge(UpdateColumnSchema);
+
+export const CardIdSchema = z.object({
+  card_id: z.number().int().positive(),
+});
+
+export const UpdateCardWithIdSchema = z.object({
+  card_id: z.number().int().positive(),
+}).merge(UpdateCardSchema);
+
+export const CommentIdSchema = z.object({
+  comment_id: z.number().int().positive(),
+});
+
+export const CardTagSchema = z.object({
+  card_id: z.number().int().positive(),
+  tag_id: z.number().int().positive(),
+});
+
+export const SearchCardsSchema = z.object({
+  query: z.string().min(1),
+  board_id: z.number().int().positive().optional(),
+  priority: PrioritySchema.optional(),
+  assigned_to: z.string().max(255).optional(),
+});
+
+export const EmptySchema = z.object({});
+
 // API response types
 export interface KanbanBoardData {
   board: {

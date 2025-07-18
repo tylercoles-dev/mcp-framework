@@ -3,10 +3,15 @@ import { KanbanBoard } from './components/KanbanBoard';
 import { BoardSelector } from './components/BoardSelector';
 import { CreateBoard } from './components/CreateBoard';
 import { MCPClient } from './services/mcp-client';
+import { MCPStreamingClient } from './services/mcp-client-streaming';
 import { Board, KanbanBoardData } from './types';
 import './App.css';
 
-const mcpClient = new MCPClient('http://localhost:3001');
+// Toggle between regular and streaming client
+const useStreaming = window.location.search.includes('streaming=true');
+const mcpClient = useStreaming 
+  ? new MCPStreamingClient('http://localhost:3001')
+  : new MCPClient('http://localhost:3001');
 
 function App() {
   const [boards, setBoards] = useState<Board[]>([]);
@@ -30,10 +35,10 @@ function App() {
     try {
       setLoading(true);
       const result = await mcpClient.callTool('get_boards', {});
-      if (result.structuredContent) {
-        setBoards(result.structuredContent as Board[]);
-        if (!selectedBoard && result.structuredContent.length > 0) {
-          setSelectedBoard(result.structuredContent[0].id);
+      if (result.structuredContent?.boards) {
+        setBoards(result.structuredContent.boards as Board[]);
+        if (!selectedBoard && result.structuredContent.boards.length > 0) {
+          setSelectedBoard(result.structuredContent.boards[0].id);
         }
       }
       setError(null);
@@ -137,7 +142,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🗂️ Kanban Board</h1>
+        <h1>🗂️ Kanban Board {useStreaming && <span style={{fontSize: '0.6em', color: '#4CAF50'}}>(Streaming Mode)</span>}</h1>
         <div className="header-controls">
           <BoardSelector
             boards={boards}
@@ -149,6 +154,18 @@ function App() {
             onClick={() => setShowCreateBoard(true)}
           >
             + New Board
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              const newUrl = useStreaming 
+                ? window.location.pathname 
+                : window.location.pathname + '?streaming=true';
+              window.location.href = newUrl;
+            }}
+            style={{marginLeft: '10px'}}
+          >
+            {useStreaming ? 'Switch to JSON' : 'Switch to Streaming'}
           </button>
         </div>
       </header>

@@ -1,5 +1,5 @@
-import { ToolResult } from '@tylercoles/mcp-server';
-import { KanbanDatabase, Board, Column, Card, Tag, Comment } from '../database/index.js';
+import { MCPServer, ToolResult } from '@tylercoles/mcp-server';
+import { KanbanDatabase, Board, Column, Card, Tag, Comment } from '../database';
 import {
   CreateBoardSchema,
   UpdateBoardSchema,
@@ -10,16 +10,26 @@ import {
   MoveCardSchema,
   CreateTagSchema,
   CreateCommentSchema,
+  BoardIdSchema,
+  UpdateBoardWithIdSchema,
+  ColumnIdSchema,
+  UpdateColumnWithIdSchema,
+  CardIdSchema,
+  UpdateCardWithIdSchema,
+  CommentIdSchema,
+  CardTagSchema,
+  SearchCardsSchema,
+  EmptySchema,
   NotFoundError,
   ValidationError,
   KanbanBoardData,
   KanbanStats,
-} from '../types/index.js';
+} from '../types/index';
 
 export class KanbanTools {
-  constructor(private db: KanbanDatabase) {}
+  constructor(private db: KanbanDatabase) { }
 
-  registerTools(server: any) {
+  registerTools(server: MCPServer) {
     // Board management tools
     this.registerGetBoardsTool(server);
     this.registerGetBoardTool(server);
@@ -54,14 +64,11 @@ export class KanbanTools {
     this.registerSearchCardsTool(server);
   }
 
-  private registerGetBoardsTool(server: any): void {
+  private registerGetBoardsTool(server: MCPServer): void {
     server.registerTool('get_boards', {
       title: 'Get All Boards',
       description: 'Retrieve all kanban boards',
-      inputSchema: {
-        type: 'object',
-        properties: {},
-      },
+      inputSchema: EmptySchema,
     }, async (): Promise<ToolResult> => {
       try {
         const boards = await this.db.getBoards();
@@ -77,6 +84,7 @@ export class KanbanTools {
                 .join('\n\n')}`,
             },
           ],
+          structuredContent: { boards },
         };
       } catch (error) {
         return {
@@ -92,20 +100,11 @@ export class KanbanTools {
     });
   }
 
-  private registerGetBoardTool(server: any): void {
+  private registerGetBoardTool(server: MCPServer): void {
     server.registerTool('get_board', {
       title: 'Get Board Details',
       description: 'Retrieve detailed information about a specific board including columns and cards',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          board_id: {
-            type: 'number',
-            description: 'The ID of the board to retrieve',
-          },
-        },
-        required: ['board_id'],
-      },
+      inputSchema: BoardIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { board_id } = args;
@@ -123,9 +122,9 @@ export class KanbanTools {
               const cardsWithTags = await Promise.all(
                 cards.map(async (card) => {
                   const tags = await this.db.getCardTags(card.id!);
-                  return { 
-                    ...card, 
-                    id: card.id!, 
+                  return {
+                    ...card,
+                    id: card.id!,
                     tags: tags.map(tag => ({ ...tag, id: tag.id! }))
                   };
                 })
@@ -149,6 +148,7 @@ export class KanbanTools {
                 .join('\n\n')}`,
             },
           ],
+          structuredContent: boardData as any,
         };
       } catch (error) {
         return {
@@ -164,32 +164,23 @@ export class KanbanTools {
     });
   }
 
-  private registerCreateBoardTool(server: any): void {
+  private registerCreateBoardTool(server: MCPServer): void {
     server.registerTool('create_board', {
       title: 'Create New Board',
       description: 'Create a new kanban board',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: {
-            type: 'string',
-            description: 'Name of the board',
-          },
-          description: {
-            type: 'string',
-            description: 'Optional description of the board',
-          },
-          color: {
-            type: 'string',
-            description: 'Hex color code for the board (e.g., #6366f1)',
-            pattern: '^#[0-9A-Fa-f]{6}$',
-          },
-        },
-        required: ['name'],
-      },
+      inputSchema: CreateBoardSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
-        const input = CreateBoardSchema.parse(args);
+        // Validate input with proper error handling
+        const parseResult = CreateBoardSchema.safeParse(args);
+        if (!parseResult.success) {
+          const errorMessages = parseResult.error.errors.map(err =>
+            `${err.path.join('.')}: ${err.message}`
+          ).join(', ');
+          throw new ValidationError(`Invalid input: ${errorMessages}`);
+        }
+
+        const input = parseResult.data;
         const board = await this.db.createBoard({
           name: input.name,
           description: input.description || null,
@@ -218,33 +209,11 @@ export class KanbanTools {
     });
   }
 
-  private registerUpdateBoardTool(server: any): void {
+  private registerUpdateBoardTool(server: MCPServer): void {
     server.registerTool('update_board', {
       title: 'Update Board',
       description: 'Update an existing kanban board',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          board_id: {
-            type: 'number',
-            description: 'ID of the board to update',
-          },
-          name: {
-            type: 'string',
-            description: 'New name for the board',
-          },
-          description: {
-            type: 'string',
-            description: 'New description for the board',
-          },
-          color: {
-            type: 'string',
-            description: 'New hex color code for the board',
-            pattern: '^#[0-9A-Fa-f]{6}$',
-          },
-        },
-        required: ['board_id'],
-      },
+      inputSchema: UpdateBoardWithIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { board_id, ...updates } = args;
@@ -277,20 +246,11 @@ export class KanbanTools {
     });
   }
 
-  private registerDeleteBoardTool(server: any): void {
+  private registerDeleteBoardTool(server: MCPServer): void {
     server.registerTool('delete_board', {
       title: 'Delete Board',
       description: 'Delete a kanban board and all its columns and cards',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          board_id: {
-            type: 'number',
-            description: 'ID of the board to delete',
-          },
-        },
-        required: ['board_id'],
-      },
+      inputSchema: BoardIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { board_id } = args;
@@ -322,46 +282,28 @@ export class KanbanTools {
     });
   }
 
-  private registerCreateColumnTool(server: any): void {
+  private registerCreateColumnTool(server: MCPServer): void {
     server.registerTool('create_column', {
       title: 'Create Column',
       description: 'Create a new column in a kanban board',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          board_id: {
-            type: 'number',
-            description: 'ID of the board to add the column to',
-          },
-          name: {
-            type: 'string',
-            description: 'Name of the column',
-          },
-          position: {
-            type: 'number',
-            description: 'Position of the column (0-based)',
-          },
-          color: {
-            type: 'string',
-            description: 'Hex color code for the column',
-            pattern: '^#[0-9A-Fa-f]{6}$',
-          },
-        },
-        required: ['board_id', 'name'],
-      },
+      inputSchema: CreateColumnSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
-        const input = CreateColumnSchema.parse(args);
-        const column = await this.db.createColumn(input);
+        const input = CreateColumnSchema.safeParse(args);
+        if (input.success) {
+          const column = await this.db.createColumn(input.data as any);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `✅ Successfully created column "${column.name}" (ID: ${column.id})`,
-            },
-          ],
-        };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `✅ Successfully created column "${column.name}" (ID: ${column.id})`,
+              },
+            ],
+          };
+        }
+
+        throw input.error;
       } catch (error) {
         return {
           content: [
@@ -376,33 +318,11 @@ export class KanbanTools {
     });
   }
 
-  private registerUpdateColumnTool(server: any): void {
+  private registerUpdateColumnTool(server: MCPServer): void {
     server.registerTool('update_column', {
       title: 'Update Column',
       description: 'Update an existing column',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          column_id: {
-            type: 'number',
-            description: 'ID of the column to update',
-          },
-          name: {
-            type: 'string',
-            description: 'New name for the column',
-          },
-          position: {
-            type: 'number',
-            description: 'New position for the column',
-          },
-          color: {
-            type: 'string',
-            description: 'New hex color code for the column',
-            pattern: '^#[0-9A-Fa-f]{6}$',
-          },
-        },
-        required: ['column_id'],
-      },
+      inputSchema: UpdateColumnWithIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { column_id, ...updates } = args;
@@ -435,20 +355,11 @@ export class KanbanTools {
     });
   }
 
-  private registerDeleteColumnTool(server: any): void {
+  private registerDeleteColumnTool(server: MCPServer): void {
     server.registerTool('delete_column', {
       title: 'Delete Column',
       description: 'Delete a column and all its cards',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          column_id: {
-            type: 'number',
-            description: 'ID of the column to delete',
-          },
-        },
-        required: ['column_id'],
-      },
+      inputSchema: ColumnIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { column_id } = args;
@@ -480,46 +391,11 @@ export class KanbanTools {
     });
   }
 
-  private registerCreateCardTool(server: any): void {
+  private registerCreateCardTool(server: MCPServer): void {
     server.registerTool('create_card', {
       title: 'Create Card',
       description: 'Create a new card in a column',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          board_id: {
-            type: 'number',
-            description: 'ID of the board',
-          },
-          column_id: {
-            type: 'number',
-            description: 'ID of the column to add the card to',
-          },
-          title: {
-            type: 'string',
-            description: 'Title of the card',
-          },
-          description: {
-            type: 'string',
-            description: 'Optional description of the card',
-          },
-          priority: {
-            type: 'string',
-            enum: ['low', 'medium', 'high', 'urgent'],
-            description: 'Priority level of the card',
-          },
-          assigned_to: {
-            type: 'string',
-            description: 'Person assigned to the card',
-          },
-          due_date: {
-            type: 'string',
-            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-            description: 'Due date in YYYY-MM-DD format',
-          },
-        },
-        required: ['board_id', 'column_id', 'title'],
-      },
+      inputSchema: CreateCardSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const input = CreateCardSchema.parse(args);
@@ -556,42 +432,11 @@ export class KanbanTools {
     });
   }
 
-  private registerUpdateCardTool(server: any): void {
+  private registerUpdateCardTool(server: MCPServer): void {
     server.registerTool('update_card', {
       title: 'Update Card',
       description: 'Update an existing card',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          card_id: {
-            type: 'number',
-            description: 'ID of the card to update',
-          },
-          title: {
-            type: 'string',
-            description: 'New title for the card',
-          },
-          description: {
-            type: 'string',
-            description: 'New description for the card',
-          },
-          priority: {
-            type: 'string',
-            enum: ['low', 'medium', 'high', 'urgent'],
-            description: 'New priority level',
-          },
-          assigned_to: {
-            type: 'string',
-            description: 'New assignee',
-          },
-          due_date: {
-            type: 'string',
-            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-            description: 'New due date in YYYY-MM-DD format',
-          },
-        },
-        required: ['card_id'],
-      },
+      inputSchema: UpdateCardWithIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { card_id, ...updates } = args;
@@ -624,28 +469,11 @@ export class KanbanTools {
     });
   }
 
-  private registerMoveCardTool(server: any): void {
+  private registerMoveCardTool(server: MCPServer): void {
     server.registerTool('move_card', {
       title: 'Move Card',
       description: 'Move a card to a different column or position',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          card_id: {
-            type: 'number',
-            description: 'ID of the card to move',
-          },
-          column_id: {
-            type: 'number',
-            description: 'ID of the destination column',
-          },
-          position: {
-            type: 'number',
-            description: 'New position in the column (0-based)',
-          },
-        },
-        required: ['card_id', 'column_id', 'position'],
-      },
+      inputSchema: MoveCardSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const input = MoveCardSchema.parse(args);
@@ -677,20 +505,11 @@ export class KanbanTools {
     });
   }
 
-  private registerDeleteCardTool(server: any): void {
+  private registerDeleteCardTool(server: MCPServer): void {
     server.registerTool('delete_card', {
       title: 'Delete Card',
       description: 'Delete a card',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          card_id: {
-            type: 'number',
-            description: 'ID of the card to delete',
-          },
-        },
-        required: ['card_id'],
-      },
+      inputSchema: CardIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { card_id } = args;
@@ -722,14 +541,11 @@ export class KanbanTools {
     });
   }
 
-  private registerGetTagsTool(server: any): void {
+  private registerGetTagsTool(server: MCPServer): void {
     server.registerTool('get_tags', {
       title: 'Get All Tags',
       description: 'Retrieve all available tags',
-      inputSchema: {
-        type: 'object',
-        properties: {},
-      },
+      inputSchema: EmptySchema,
     }, async (): Promise<ToolResult> => {
       try {
         const tags = await this.db.getTags();
@@ -757,38 +573,28 @@ export class KanbanTools {
     });
   }
 
-  private registerCreateTagTool(server: any): void {
+  private registerCreateTagTool(server: MCPServer): void {
     server.registerTool('create_tag', {
       title: 'Create Tag',
       description: 'Create a new tag',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: {
-            type: 'string',
-            description: 'Name of the tag',
-          },
-          color: {
-            type: 'string',
-            description: 'Hex color code for the tag',
-            pattern: '^#[0-9A-Fa-f]{6}$',
-          },
-        },
-        required: ['name'],
-      },
+      inputSchema: CreateTagSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
-        const input = CreateTagSchema.parse(args);
-        const tag = await this.db.createTag(input);
+        const input = CreateTagSchema.safeParse(args);
+        if (input.success) {
+          const tag = await this.db.createTag(input.data as any);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `✅ Successfully created tag "${tag.name}" (ID: ${tag.id})`,
-            },
-          ],
-        };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `✅ Successfully created tag "${tag.name}" (ID: ${tag.id})`,
+              },
+            ],
+          };
+        }
+        else
+          throw input.error;
       } catch (error) {
         return {
           content: [
@@ -803,24 +609,11 @@ export class KanbanTools {
     });
   }
 
-  private registerAddCardTagTool(server: any): void {
+  private registerAddCardTagTool(server: MCPServer): void {
     server.registerTool('add_card_tag', {
       title: 'Add Tag to Card',
       description: 'Add a tag to a card',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          card_id: {
-            type: 'number',
-            description: 'ID of the card',
-          },
-          tag_id: {
-            type: 'number',
-            description: 'ID of the tag to add',
-          },
-        },
-        required: ['card_id', 'tag_id'],
-      },
+      inputSchema: CardTagSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { card_id, tag_id } = args;
@@ -848,24 +641,11 @@ export class KanbanTools {
     });
   }
 
-  private registerRemoveCardTagTool(server: any): void {
+  private registerRemoveCardTagTool(server: MCPServer): void {
     server.registerTool('remove_card_tag', {
       title: 'Remove Tag from Card',
       description: 'Remove a tag from a card',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          card_id: {
-            type: 'number',
-            description: 'ID of the card',
-          },
-          tag_id: {
-            type: 'number',
-            description: 'ID of the tag to remove',
-          },
-        },
-        required: ['card_id', 'tag_id'],
-      },
+      inputSchema: CardTagSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { card_id, tag_id } = args;
@@ -897,28 +677,11 @@ export class KanbanTools {
     });
   }
 
-  private registerAddCommentTool(server: any): void {
+  private registerAddCommentTool(server: MCPServer): void {
     server.registerTool('add_comment', {
       title: 'Add Comment',
       description: 'Add a comment to a card',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          card_id: {
-            type: 'number',
-            description: 'ID of the card',
-          },
-          content: {
-            type: 'string',
-            description: 'Comment content',
-          },
-          author: {
-            type: 'string',
-            description: 'Author of the comment',
-          },
-        },
-        required: ['card_id', 'content'],
-      },
+      inputSchema: CreateCommentSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const input = CreateCommentSchema.parse(args);
@@ -950,20 +713,11 @@ export class KanbanTools {
     });
   }
 
-  private registerGetCommentsTool(server: any): void {
+  private registerGetCommentsTool(server: MCPServer): void {
     server.registerTool('get_comments', {
       title: 'Get Card Comments',
       description: 'Get all comments for a card',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          card_id: {
-            type: 'number',
-            description: 'ID of the card',
-          },
-        },
-        required: ['card_id'],
-      },
+      inputSchema: CardIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { card_id } = args;
@@ -996,20 +750,11 @@ export class KanbanTools {
     });
   }
 
-  private registerDeleteCommentTool(server: any): void {
+  private registerDeleteCommentTool(server: MCPServer): void {
     server.registerTool('delete_comment', {
       title: 'Delete Comment',
       description: 'Delete a comment',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          comment_id: {
-            type: 'number',
-            description: 'ID of the comment to delete',
-          },
-        },
-        required: ['comment_id'],
-      },
+      inputSchema: CommentIdSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { comment_id } = args;
@@ -1041,14 +786,11 @@ export class KanbanTools {
     });
   }
 
-  private registerGetStatsTool(server: any): void {
+  private registerGetStatsTool(server: MCPServer): void {
     server.registerTool('get_stats', {
       title: 'Get Kanban Statistics',
       description: 'Get analytics and statistics for the kanban system',
-      inputSchema: {
-        type: 'object',
-        properties: {},
-      },
+      inputSchema: EmptySchema,
     }, async (): Promise<ToolResult> => {
       try {
         const boards = await this.db.getBoards();
@@ -1102,37 +844,15 @@ export class KanbanTools {
     });
   }
 
-  private registerSearchCardsTool(server: any): void {
+  private registerSearchCardsTool(server: MCPServer): void {
     server.registerTool('search_cards', {
       title: 'Search Cards',
       description: 'Search for cards by title, description, or assignee',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Search query',
-          },
-          board_id: {
-            type: 'number',
-            description: 'Optional: limit search to specific board',
-          },
-          priority: {
-            type: 'string',
-            enum: ['low', 'medium', 'high', 'urgent'],
-            description: 'Optional: filter by priority',
-          },
-          assigned_to: {
-            type: 'string',
-            description: 'Optional: filter by assignee',
-          },
-        },
-        required: ['query'],
-      },
+      inputSchema: SearchCardsSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { query, board_id, priority, assigned_to } = args;
-        
+
         // Simple search implementation - in a real app you'd want full-text search
         let cards: Card[];
         if (board_id) {
@@ -1146,13 +866,13 @@ export class KanbanTools {
         }
 
         const filteredCards = cards.filter(card => {
-          const matchesQuery = 
+          const matchesQuery =
             card.title.toLowerCase().includes(query.toLowerCase()) ||
             (card.description && card.description.toLowerCase().includes(query.toLowerCase()));
-          
+
           const matchesPriority = !priority || card.priority === priority;
           const matchesAssignee = !assigned_to || card.assigned_to === assigned_to;
-          
+
           return matchesQuery && matchesPriority && matchesAssignee;
         });
 
