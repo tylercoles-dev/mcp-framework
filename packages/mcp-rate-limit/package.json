@@ -1,6 +1,6 @@
 {
   "name": "@tylercoles/mcp-rate-limit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Rate limiting utilities for MCP framework",
   "main": "dist/index.js",
   "type": "module",

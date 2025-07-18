@@ -1,11 +1,11 @@
 {
   "name": "@tylercoles/mcp-framework",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A modular framework for building Model Context Protocol (MCP) servers",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/tylercoles-dev/mcp-framework"
+    "url": "git+https://github.com/tylercoles-dev/mcp-framework.git"
   },
   "keywords": [
     "mcp",
@@ -35,7 +35,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "node tools/verify-workspaces.js",
     "publish:packages": "npx ts-node --project tools/tsconfig.json tools/publish-packages.ts",
-    "prebuild":"rimraf --glob packages/**/tsconfig.tsbuildinfo examples/**/tsconfig.tsbuildinfo packages/**/dist examples/**/dist",
+    "prebuild": "rimraf --glob packages/**/tsconfig.tsbuildinfo examples/**/tsconfig.tsbuildinfo packages/**/dist examples/**/dist",
     "ws": "npm --workspaces",
     "ws:info": "npm ls --depth=0",
     "security:audit": "node tools/security-audit.js"

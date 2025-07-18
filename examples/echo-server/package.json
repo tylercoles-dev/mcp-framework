@@ -15,11 +15,11 @@
         "start:multi": "node dist/multi-transport.js"
     },
     "dependencies": {
-        "@tylercoles/mcp-server": "0.2.0",
-        "@tylercoles/mcp-transport-stdio": "0.2.0",
-        "@tylercoles/mcp-transport-http": "0.2.0",
-        "@tylercoles/mcp-auth": "0.2.0",
-        "@tylercoles/mcp-auth-authentik": "0.2.0"
+        "@tylercoles/mcp-server": "0.2.1",
+        "@tylercoles/mcp-transport-stdio": "0.2.1",
+        "@tylercoles/mcp-transport-http": "0.2.1",
+        "@tylercoles/mcp-auth": "0.2.1",
+        "@tylercoles/mcp-auth-authentik": "0.2.1"
     },
     "devDependencies": {
         "@types/node": "^20.0.0",

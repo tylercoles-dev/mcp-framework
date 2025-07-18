@@ -1,6 +1,6 @@
 {
     "name": "@tylercoles/mcp-transport-sse",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "Server-Sent Events (SSE) transport for MCP servers",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -37,7 +37,7 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.15.1",
-        "@tylercoles/mcp-server": "^0.1.1",
+        "@tylercoles/mcp-server": "^0.2.1",
         "cors": "^2.8.5",
         "express": "^4.18.2",
         "uuid": "^9.0.1"

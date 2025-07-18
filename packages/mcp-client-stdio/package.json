@@ -1,6 +1,6 @@
 {
     "name": "@tylercoles/mcp-client-stdio",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "MCP client for stdio transport - wraps stdio MCP servers with clean TypeScript interfaces",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -38,7 +38,7 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.15.1",
-        "@tylercoles/mcp-client": "^0.2.0"
+        "@tylercoles/mcp-client": "^0.2.1"
     },
     "devDependencies": {
         "@types/node": "^20.0.0",

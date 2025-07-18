@@ -392,7 +392,7 @@ packages/new-package/
    ```json
    {
      "name": "@tylercoles/mcp-new-package",
-     "version": "0.2.0",
+     "version": "0.2.1",
      "main": "dist/index.js",
      "types": "dist/index.d.ts",
      "scripts": {
