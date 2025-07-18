@@ -8,7 +8,11 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
     registerTool: vi.fn(),
     registerResource: vi.fn(),
     registerPrompt: vi.fn(),
-    notification: vi.fn()
+    notification: vi.fn(),
+    server: {
+      notification: vi.fn(),
+      setRequestHandler: vi.fn()
+    }
   }))
 }));
 
@@ -37,7 +41,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendProgressNotification(progressToken, progress, total, message);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/progress',
         params: {
           progressToken,
@@ -54,7 +58,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendProgressNotification(progressToken, progress);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/progress',
         params: {
           progressToken,
@@ -71,7 +75,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendProgressNotification(progressToken, progress);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/progress',
         params: {
           progressToken,
@@ -91,7 +95,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendLogNotification(level, data, logger);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/message',
         params: {
           level,
@@ -107,7 +111,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendLogNotification(level, data);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/message',
         params: {
           level,
@@ -123,7 +127,7 @@ describe('MCPServer Notifications', () => {
       for (const level of levels) {
         await server.sendLogNotification(level, `Test ${level} message`);
         
-        expect(mockSDKServer.notification).toHaveBeenCalledWith({
+        expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
           method: 'notifications/message',
           params: {
             level,
@@ -142,7 +146,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendCancellationNotification(requestId, reason);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/cancelled',
         params: {
           requestId,
@@ -156,7 +160,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendCancellationNotification(requestId);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/cancelled',
         params: {
           requestId,
@@ -170,7 +174,7 @@ describe('MCPServer Notifications', () => {
     it('should send resource list changed notification', async () => {
       await server.sendResourceListChangedNotification();
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/resources/list_changed',
         params: {}
       });
@@ -181,7 +185,7 @@ describe('MCPServer Notifications', () => {
 
       await server.sendResourceUpdatedNotification(uri);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/resources/updated',
         params: {
           uri
@@ -194,7 +198,7 @@ describe('MCPServer Notifications', () => {
     it('should send tool list changed notification', async () => {
       await server.sendToolListChangedNotification();
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/tools/list_changed',
         params: {}
       });
@@ -205,7 +209,7 @@ describe('MCPServer Notifications', () => {
     it('should send prompt list changed notification', async () => {
       await server.sendPromptListChangedNotification();
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/prompts/list_changed',
         params: {}
       });
@@ -242,7 +246,7 @@ describe('MCPServer Notifications', () => {
       // Give it a moment for the async notification to be sent
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/tools/list_changed',
         params: {}
       });
@@ -261,7 +265,7 @@ describe('MCPServer Notifications', () => {
       // Give it a moment for the async notification to be sent
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/resources/list_changed',
         params: {}
       });
@@ -280,7 +284,7 @@ describe('MCPServer Notifications', () => {
       // Give it a moment for the async notification to be sent
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/prompts/list_changed',
         params: {}
       });
@@ -302,7 +306,7 @@ describe('MCPServer Notifications', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
 
       // Should only have the previous notifications, not this one
-      expect(mockSDKServer.notification).not.toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).not.toHaveBeenCalledWith({
         method: 'notifications/tools/list_changed',
         params: {}
       });
@@ -312,7 +316,7 @@ describe('MCPServer Notifications', () => {
   describe('Error Handling', () => {
     it('should handle notification errors gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation();
-      mockSDKServer.notification.mockRejectedValue(new Error('Network error'));
+      mockSDKServer.server.notification.mockRejectedValue(new Error('Network error'));
 
       // Should not throw
       await expect(server.sendProgressNotification('token', 50)).resolves.not.toThrow();
@@ -322,7 +326,7 @@ describe('MCPServer Notifications', () => {
 
     it('should handle registration notification errors gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation();
-      mockSDKServer.notification.mockRejectedValue(new Error('Network error'));
+      mockSDKServer.server.notification.mockRejectedValue(new Error('Network error'));
 
       let mockTransport: any = {
         start: vi.fn(),

@@ -16,7 +16,11 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
       registerResource: vi.fn(),
       registerPrompt: vi.fn(),
       notification: vi.fn(),
-      setRequestHandler: vi.fn()
+      setRequestHandler: vi.fn(),
+      server: {
+        notification: vi.fn(),
+        setRequestHandler: vi.fn()
+      }
     };
     return mockServer;
   })
@@ -111,7 +115,7 @@ describe('MCP Advanced Logging System', () => {
       await server.logDebug(testMessage, testData, logger);
 
       // All should have been called (Debug won't be filtered out due to logger-specific level)
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(8);
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(8);
     });
   });
 
@@ -122,7 +126,7 @@ describe('MCP Advanced Logging System', () => {
       await server.logInfo('Info message');
       await server.logError('Error message');
 
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(2); // Info and Error only
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(2); // Info and Error only
     });
 
     it('should filter logs based on logger-specific levels', async () => {
@@ -134,14 +138,14 @@ describe('MCP Advanced Logging System', () => {
       await server.logInfo('Info message', {}, 'test.error'); // Should be filtered
       await server.logError('Error message', {}, 'test.error'); // Should pass
 
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(2); // Debug from test.debug and Error from test.error
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(2); // Debug from test.debug and Error from test.error
     });
 
     it('should handle unknown loggers with global level', async () => {
       await server.logDebug('Debug message', {}, 'unknown.logger'); // Should be filtered (global Info level)
       await server.logWarning('Warning message', {}, 'unknown.logger'); // Should pass
 
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(1); // Warning only
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(1); // Warning only
     });
   });
 
@@ -156,8 +160,8 @@ describe('MCP Advanced Logging System', () => {
 
       await server.log(LogLevel.Info, message, data, logger, source, requestId, sessionId);
 
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(1);
-      const call = mockSDKServer.notification.mock.calls[0][0];
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(1);
+      const call = mockSDKServer.server.notification.mock.calls[0][0];
       
       expect(call.method).toBe('notifications/message');
       expect(call.params.level).toBe('info');
@@ -187,14 +191,19 @@ describe('MCP Advanced Logging System', () => {
         }
       });
       const simpleMockSDK = simpleServer.getSDKServer();
+      
+      // Ensure the server property exists
+      if (!simpleMockSDK.server) {
+        simpleMockSDK.server = { notification: vi.fn() };
+      }
 
       const message = 'Simple log message';
       const data = { key: 'value' };
 
       await simpleServer.logInfo(message, data, 'simple.logger');
 
-      expect(simpleMockSDK.notification).toHaveBeenCalledTimes(1);
-      const call = simpleMockSDK.notification.mock.calls[0][0];
+      expect(simpleMockSDK.server.notification).toHaveBeenCalledTimes(1);
+      const call = simpleMockSDK.server.notification.mock.calls[0][0];
       
       expect(call.method).toBe('notifications/message');
       expect(call.params.level).toBe('info');
@@ -213,10 +222,15 @@ describe('MCP Advanced Logging System', () => {
         }
       });
       const noTimestampMockSDK = noTimestampServer.getSDKServer();
+      
+      // Ensure the server property exists
+      if (!noTimestampMockSDK.server) {
+        noTimestampMockSDK.server = { notification: vi.fn() };
+      }
 
       await noTimestampServer.logInfo('Test message');
 
-      const call = noTimestampMockSDK.notification.mock.calls[0][0];
+      const call = noTimestampMockSDK.server.notification.mock.calls[0][0];
       const logEntry = call.params.data as StructuredLogEntry;
       
       expect(logEntry.timestamp).toBe('');
@@ -230,7 +244,7 @@ describe('MCP Advanced Logging System', () => {
       
       await server.logInfo(longMessage);
 
-      const call = mockSDKServer.notification.mock.calls[0][0];
+      const call = mockSDKServer.server.notification.mock.calls[0][0];
       const logEntry = call.params.data as StructuredLogEntry;
       
       expect(logEntry.message).toHaveLength(1000);
@@ -243,7 +257,7 @@ describe('MCP Advanced Logging System', () => {
       
       await server.logInfo(shortMessage);
 
-      const call = mockSDKServer.notification.mock.calls[0][0];
+      const call = mockSDKServer.server.notification.mock.calls[0][0];
       const logEntry = call.params.data as StructuredLogEntry;
       
       expect(logEntry.message).toBe(shortMessage);
@@ -259,12 +273,17 @@ describe('MCP Advanced Logging System', () => {
         }
       });
       const unlimitedMockSDK = unlimitedServer.getSDKServer();
+      
+      // Ensure the server property exists
+      if (!unlimitedMockSDK.server) {
+        unlimitedMockSDK.server = { notification: vi.fn() };
+      }
 
       const veryLongMessage = 'A'.repeat(20000);
       
       await unlimitedServer.logInfo(veryLongMessage);
 
-      const call = unlimitedMockSDK.notification.mock.calls[0][0];
+      const call = unlimitedMockSDK.server.notification.mock.calls[0][0];
       const logEntry = call.params.data as StructuredLogEntry;
       
       expect(logEntry.message).toBe(veryLongMessage);
@@ -280,7 +299,7 @@ describe('MCP Advanced Logging System', () => {
 
       // Should now allow debug logs
       await server.logDebug('Debug message');
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(2); // 1 for setLogLevel notification + 1 for debug
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(2); // 1 for setLogLevel notification + 1 for debug
     });
 
     it('should set logger-specific log level', async () => {
@@ -293,14 +312,14 @@ describe('MCP Advanced Logging System', () => {
       await server.logInfo('Info message', {}, 'specific.logger');
       await server.logError('Error message', {}, 'specific.logger');
       
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(2); // 1 for setLogLevel notification + 1 for error
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(2); // 1 for setLogLevel notification + 1 for error
     });
 
     it('should send notification when log level changes', async () => {
       await server.setLogLevel(LogLevel.Debug, 'test.logger');
       
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(1);
-      const call = mockSDKServer.notification.mock.calls[0][0];
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(1);
+      const call = mockSDKServer.server.notification.mock.calls[0][0];
       
       expect(call.method).toBe('notifications/message');
       expect(call.params.level).toBe('info');
@@ -313,10 +332,10 @@ describe('MCP Advanced Logging System', () => {
 
   describe('Logging Endpoint Registration', () => {
     it('should register logging/setLevel endpoint', () => {
-      expect(mockSDKServer.setRequestHandler).toHaveBeenCalled();
+      expect(mockSDKServer.server.setRequestHandler).toHaveBeenCalled();
       
       // Verify at least one handler was registered
-      const registrations = mockSDKServer.setRequestHandler.mock.calls;
+      const registrations = mockSDKServer.server.setRequestHandler.mock.calls;
       expect(registrations.length).toBeGreaterThan(0);
       
       // Check that we have both schema and handler function for each registration
@@ -335,7 +354,7 @@ describe('MCP Advanced Logging System', () => {
       expect(config.loggers.get('test.handler')).toBe(LogLevel.Debug);
       
       // Verify that setRequestHandler was called with a handler function
-      const registrations = mockSDKServer.setRequestHandler.mock.calls;
+      const registrations = mockSDKServer.server.setRequestHandler.mock.calls;
       expect(registrations.length).toBeGreaterThan(0);
       
       // All registrations should have handler functions
@@ -353,16 +372,16 @@ describe('MCP Advanced Logging System', () => {
       await server.log(invalidLevel, 'Test message');
       
       // Should still send notification with 'info' as fallback
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(1);
-      const call = mockSDKServer.notification.mock.calls[0][0];
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(1);
+      const call = mockSDKServer.server.notification.mock.calls[0][0];
       expect(call.params.level).toBe('info'); // Default fallback
     });
 
     it('should handle missing logger gracefully', async () => {
       await server.logInfo('Test message', {}, undefined);
       
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(1);
-      const call = mockSDKServer.notification.mock.calls[0][0];
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(1);
+      const call = mockSDKServer.server.notification.mock.calls[0][0];
       expect(call.params.logger).toBeUndefined();
     });
   });
@@ -405,7 +424,7 @@ describe('MCP Advanced Logging System', () => {
       await server.logError('Error message', {}, 'app.other');
       
       // 2 for setLogLevel notifications + 1 error from app + 1 debug from app.debug + 1 error from app.other = 5
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(5);
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(5);
     });
   });
 
@@ -421,7 +440,7 @@ describe('MCP Advanced Logging System', () => {
       await server.logDebug('Heavy debug log', heavyData);
       
       // Should not have sent notification
-      expect(mockSDKServer.notification).not.toHaveBeenCalled();
+      expect(mockSDKServer.server.notification).not.toHaveBeenCalled();
     });
 
     it('should handle concurrent logging calls', async () => {
@@ -433,7 +452,7 @@ describe('MCP Advanced Logging System', () => {
       
       await Promise.all(logPromises);
       
-      expect(mockSDKServer.notification).toHaveBeenCalledTimes(10);
+      expect(mockSDKServer.server.notification).toHaveBeenCalledTimes(10);
     });
   });
 });

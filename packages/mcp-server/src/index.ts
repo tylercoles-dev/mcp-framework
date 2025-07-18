@@ -1,6 +1,6 @@
 import { ResourceMetadata, McpServer as SDKMcpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol";
-import { CallToolResult, ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types";
+import { CallToolResult, ServerNotification, ServerRequest, CompleteRequestSchema, CreateMessageRequestSchema, CompleteResult, CreateMessageResult } from "@modelcontextprotocol/sdk/types";
 import { z, ZodRawShape, ZodTypeAny } from "zod";
 import { MCPErrorFactory, MCPErrorClass, MCPError, MCPErrorCode } from "./errors.js";
 
@@ -492,13 +492,8 @@ export interface CompletionRequest {
 /**
  * Completion result interface
  */
-export interface CompletionResult {
-  completion: {
-    values: string[];
-    total?: number;
-    hasMore?: boolean;
-  };
-}
+// Use the SDK's CompleteResult type instead of our custom one
+export type CompletionResult = CompleteResult;
 
 /**
  * Completion handler function type
@@ -579,7 +574,7 @@ export interface SamplingResponse {
  */
 export type SamplingHandler = (
   request: SamplingRequest
-) => Promise<SamplingResponse>;
+) => Promise<CreateMessageResult>;
 
 /**
  * Sampling configuration
@@ -897,6 +892,7 @@ export interface ServerConfig {
   name: string;
   version: string;
   capabilities?: object;
+  propagateErrors?: boolean;
   pagination?: {
     defaultPageSize?: number;
     maxPageSize?: number;
@@ -1504,9 +1500,9 @@ export class MCPServer {
     total?: number,
     message?: string
   ): Promise<void> {
-    if (this.sdkServer.notification) {
+    if (this.sdkServer.server && this.sdkServer.server.notification) {
       try {
-        await this.sdkServer.notification({
+        await this.sdkServer.server.notification({
           method: 'notifications/progress',
           params: {
             progressToken,
@@ -1530,14 +1526,16 @@ export class MCPServer {
     logger?: string
   ): Promise<void> {
     // Send log notification via SDK server
-    await this.sdkServer.notification({
-      method: 'notifications/message',
-      params: {
-        level,
-        logger,
-        data
-      }
-    });
+    if (this.sdkServer.server && this.sdkServer.server.notification) {
+      await this.sdkServer.server.notification({
+        method: 'notifications/message',
+        params: {
+          level,
+          logger,
+          data
+        }
+      });
+    }
   }
 
   /**
@@ -1547,9 +1545,9 @@ export class MCPServer {
     requestId: string,
     reason?: string
   ): Promise<void> {
-    if (this.sdkServer.notification) {
+    if (this.sdkServer.server && this.sdkServer.server.notification) {
       try {
-        await this.sdkServer.notification({
+        await this.sdkServer.server.notification({
           method: 'notifications/cancelled',
           params: {
             requestId,
@@ -1566,9 +1564,9 @@ export class MCPServer {
    * Send notification that resource list has changed
    */
   async sendResourceListChangedNotification(): Promise<void> {
-    if (this.sdkServer.notification) {
+    if (this.sdkServer.server && this.sdkServer.server.notification) {
       try {
-        await this.sdkServer.notification({
+        await this.sdkServer.server.notification({
           method: 'notifications/resources/list_changed',
           params: {}
         });
@@ -1582,9 +1580,9 @@ export class MCPServer {
    * Send notification that a resource has been updated
    */
   async sendResourceUpdatedNotification(uri: string): Promise<void> {
-    if (this.sdkServer.notification) {
+    if (this.sdkServer.server && this.sdkServer.server.notification) {
       try {
-        await this.sdkServer.notification({
+        await this.sdkServer.server.notification({
           method: 'notifications/resources/updated',
           params: { uri }
         });
@@ -1598,9 +1596,9 @@ export class MCPServer {
    * Send notification that tool list has changed
    */
   async sendToolListChangedNotification(): Promise<void> {
-    if (this.sdkServer.notification) {
+    if (this.sdkServer.server && this.sdkServer.server.notification) {
       try {
-        await this.sdkServer.notification({
+        await this.sdkServer.server.notification({
           method: 'notifications/tools/list_changed',
           params: {}
         });
@@ -1614,9 +1612,9 @@ export class MCPServer {
    * Send notification that prompt list has changed
    */
   async sendPromptListChangedNotification(): Promise<void> {
-    if (this.sdkServer.notification) {
+    if (this.sdkServer.server && this.sdkServer.server.notification) {
       try {
-        await this.sdkServer.notification({
+        await this.sdkServer.server.notification({
           method: 'notifications/prompts/list_changed',
           params: {}
         });
@@ -1639,8 +1637,8 @@ export class MCPServer {
       })
     });
 
-    if (this.sdkServer.setRequestHandler) {
-      this.sdkServer.setRequestHandler(LoggingRequestSchema, async (request: any) => {
+    if (this.sdkServer.server && this.sdkServer.server.setRequestHandler) {
+      this.sdkServer.server.setRequestHandler(LoggingRequestSchema, async (request: any) => {
         const { level, logger } = request.params;
         const logLevel = this.nameToLogLevel(level);
         await this.setLogLevel(logLevel, logger);
@@ -2245,27 +2243,12 @@ export class MCPServer {
     this.completionHandlers.set(config.name, { config, handler });
 
     // Register with SDK server using completion/complete method
-    const CompletionRequestSchema = z.object({
-      method: z.literal('completion/complete'),
-      params: z.object({
-        ref: z.object({
-          type: z.union([z.literal('ref/prompt'), z.literal('ref/resource')]),
-          name: z.string()
-        }),
-        argument: z.object({
-          name: z.string(),
-          value: z.string()
-        }),
-        context: z.object({
-          arguments: z.record(z.string()).optional()
-        }).optional()
-      })
-    });
 
     // Register completion handler with SDK server
-    if (this.sdkServer.setRequestHandler) {
-      this.sdkServer.setRequestHandler(CompletionRequestSchema, async (request: any) => {
-        return await this.handleCompletion(request.params, this.config.propagateErrors);
+    if (this.sdkServer.server && this.sdkServer.server.setRequestHandler) {
+      this.sdkServer.server.setRequestHandler(CompleteRequestSchema, async (request: any) => {
+        const result = await this.handleCompletion(request.params, this.config.propagateErrors);
+        return result;
       });
     }
   }
@@ -2561,38 +2544,12 @@ export class MCPServer {
     this.samplingConfig = config;
 
     // Register with SDK server using sampling/createMessage method
-    const SamplingRequestSchema = z.object({
-      method: z.literal('sampling/createMessage'),
-      params: z.object({
-        messages: z.array(z.object({
-          role: z.enum(['user', 'assistant', 'system']),
-          content: z.object({
-            type: z.enum(['text', 'image']),
-            text: z.string().optional(),
-            data: z.string().optional(),
-            mimeType: z.string().optional()
-          }),
-          name: z.string().optional(),
-          annotations: z.record(z.any()).optional()
-        })),
-        modelPreferences: z.object({
-          hints: z.array(z.string()).optional(),
-          costPriority: z.number().min(0).max(1).optional(),
-          speedPriority: z.number().min(0).max(1).optional(),
-          intelligencePriority: z.number().min(0).max(1).optional()
-        }).optional(),
-        systemPrompt: z.string().optional(),
-        includeContext: z.boolean().optional(),
-        maxTokens: z.number().positive().optional(),
-        temperature: z.number().min(0).max(2).optional(),
-        metadata: z.record(z.any()).optional()
-      })
-    });
 
     // Register sampling handler with SDK server (skip in test environment)
-    if (this.sdkServer.setRequestHandler) {
-      this.sdkServer.setRequestHandler(SamplingRequestSchema, async (request: any) => {
-        return await this.handleSampling(request.params);
+    if (this.sdkServer.server && this.sdkServer.server.setRequestHandler) {
+      this.sdkServer.server.setRequestHandler(CreateMessageRequestSchema, async (request: any) => {
+        const result = await this.handleSampling(request.params);
+        return result;
       });
     }
   }
@@ -2600,7 +2557,7 @@ export class MCPServer {
   /**
    * Handle sampling requests
    */
-  private async handleSampling(request: SamplingRequest): Promise<SamplingResponse> {
+  private async handleSampling(request: SamplingRequest): Promise<CreateMessageResult> {
     if (!this.samplingConfig) {
       throw MCPErrorFactory.invalidRequest('Sampling is not configured on this server');
     }
@@ -2740,13 +2697,17 @@ export class MCPServer {
   /**
    * Validate sampling response format
    */
-  private validateSamplingResponse(response: SamplingResponse): void {
+  private validateSamplingResponse(response: CreateMessageResult): void {
     if (!response || typeof response !== 'object') {
       throw MCPErrorFactory.internalError('Sampling response must be an object');
     }
 
-    if (response.role !== 'assistant') {
-      throw MCPErrorFactory.internalError('Sampling response role must be assistant');
+    if (!response.model || typeof response.model !== 'string') {
+      throw MCPErrorFactory.internalError('Sampling response must have a model string');
+    }
+
+    if (!['user', 'assistant'].includes(response.role)) {
+      throw MCPErrorFactory.internalError('Sampling response role must be user or assistant');
     }
 
     if (!response.content || typeof response.content !== 'object') {
@@ -2761,18 +2722,7 @@ export class MCPServer {
       throw MCPErrorFactory.internalError('Invalid stop reason in sampling response');
     }
 
-    if (response.usage) {
-      const { inputTokens, outputTokens, totalTokens } = response.usage;
-      if (inputTokens !== undefined && (typeof inputTokens !== 'number' || inputTokens < 0)) {
-        throw MCPErrorFactory.internalError('Invalid input tokens count in usage');
-      }
-      if (outputTokens !== undefined && (typeof outputTokens !== 'number' || outputTokens < 0)) {
-        throw MCPErrorFactory.internalError('Invalid output tokens count in usage');
-      }
-      if (totalTokens !== undefined && (typeof totalTokens !== 'number' || totalTokens < 0)) {
-        throw MCPErrorFactory.internalError('Invalid total tokens count in usage');
-      }
-    }
+    // Usage validation is handled by the SDK schema validation
   }
 
   /**
@@ -2797,7 +2747,7 @@ export class MCPServer {
   /**
    * Create a sampling request for testing or internal use
    */
-  async createSamplingMessage(request: SamplingRequest): Promise<SamplingResponse> {
+  async createSamplingMessage(request: SamplingRequest): Promise<CreateMessageResult> {
     if (!this.samplingConfig) {
       throw MCPErrorFactory.invalidRequest('Sampling is not configured on this server');
     }

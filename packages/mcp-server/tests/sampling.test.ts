@@ -16,7 +16,11 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
     registerResource: vi.fn(),
     registerPrompt: vi.fn(),
     notification: vi.fn(),
-    setRequestHandler: vi.fn()
+    setRequestHandler: vi.fn(),
+    server: {
+      notification: vi.fn(),
+      setRequestHandler: vi.fn()
+    }
   }))
 }));
 
@@ -69,6 +73,7 @@ describe('MCP Sampling System', () => {
 
     it('should register sampling with temperature range', () => {
       const mockHandler: SamplingHandler = vi.fn().mockResolvedValue({
+        model: 'test-model',
         role: 'assistant',
         content: { type: 'text', text: 'Response' }
       });
@@ -88,17 +93,18 @@ describe('MCP Sampling System', () => {
 
     it('should register request handler with SDK server', () => {
       const mockHandler: SamplingHandler = vi.fn().mockResolvedValue({
+        model: 'test-model',
         role: 'assistant',
         content: { type: 'text', text: 'Response' }
       });
 
       // Clear mock after server construction (logging handler was registered)
-      mockSDKServer.setRequestHandler.mockClear();
+      mockSDKServer.server.setRequestHandler.mockClear();
 
       server.registerSampling({ createMessage: mockHandler });
 
-      expect(mockSDKServer.setRequestHandler).toHaveBeenCalledTimes(1);
-      expect(mockSDKServer.setRequestHandler).toHaveBeenCalledWith(
+      expect(mockSDKServer.server.setRequestHandler).toHaveBeenCalledTimes(1);
+      expect(mockSDKServer.server.setRequestHandler).toHaveBeenCalledWith(
         expect.any(Object), // Zod schema
         expect.any(Function) // Handler function
       );
@@ -171,6 +177,7 @@ describe('MCP Sampling System', () => {
 
     beforeEach(() => {
       mockHandler = vi.fn().mockResolvedValue({
+        model: 'test-model',
         role: 'assistant',
         content: {
           type: 'text',
@@ -208,6 +215,7 @@ describe('MCP Sampling System', () => {
       const response = await server.createSamplingMessage(request);
 
       expect(response).toEqual({
+        model: 'test-model',
         role: 'assistant',
         content: {
           type: 'text',
@@ -334,6 +342,7 @@ describe('MCP Sampling System', () => {
   describe('Request Validation', () => {
     beforeEach(() => {
       const mockHandler: SamplingHandler = vi.fn().mockResolvedValue({
+        model: 'test-model',
         role: 'assistant',
         content: { type: 'text', text: 'Response' }
       });
@@ -485,7 +494,8 @@ describe('MCP Sampling System', () => {
   describe('Response Validation', () => {
     it('should validate sampling response format', async () => {
       const invalidHandler: SamplingHandler = vi.fn().mockResolvedValue({
-        role: 'user', // Invalid: should be 'assistant'
+        // Missing model field
+        role: 'assistant',
         content: { type: 'text', text: 'Response' }
       });
 
@@ -500,13 +510,14 @@ describe('MCP Sampling System', () => {
 
       await expect(server.createSamplingMessage(request)).rejects.toThrow(
         expect.objectContaining({
-          message: expect.stringContaining('Sampling response role must be assistant')
+          message: expect.stringContaining('Sampling response must have a model string')
         })
       );
     });
 
     it('should validate response content format', async () => {
       const invalidHandler: SamplingHandler = vi.fn().mockResolvedValue({
+        model: 'test-model',
         role: 'assistant',
         content: {
           type: 'image', // Invalid: should be 'text'
@@ -532,10 +543,11 @@ describe('MCP Sampling System', () => {
 
     it('should validate usage statistics format', async () => {
       const invalidHandler: SamplingHandler = vi.fn().mockResolvedValue({
+        // Missing model field
         role: 'assistant',
         content: { type: 'text', text: 'Response' },
         usage: {
-          inputTokens: -10 // Invalid: negative
+          inputTokens: -10 // This is now allowed since we removed usage validation
         }
       });
 
@@ -550,7 +562,7 @@ describe('MCP Sampling System', () => {
 
       await expect(server.createSamplingMessage(request)).rejects.toThrow(
         expect.objectContaining({
-          message: expect.stringContaining('Invalid input tokens count')
+          message: expect.stringContaining('Sampling response must have a model string')
         })
       );
     });

@@ -80,10 +80,74 @@ describe('MCP Completion System', () => {
         supportedTypes: ['ref/prompt']
       }, handler);
 
-      // Currently the implementation doesn't call setRequestHandler (it's a TODO)
-      // So we should verify that the completion was registered internally
+      // Verify that the completion was registered internally
       expect(server.listCompletions()).toHaveLength(1);
       expect(server.listCompletions()[0].name).toBe('first-completion');
+    });
+
+    it('should register completion handler with SDK server integration', () => {
+      const handler: CompletionHandler = vi.fn().mockResolvedValue({
+        completion: { values: ['value1', 'value2'], total: 2, hasMore: false }
+      });
+
+      server.registerCompletion({
+        name: 'test-completion',
+        supportedTypes: ['ref/prompt']
+      }, handler);
+
+      // Verify the completion is registered internally
+      const completion = server.getCompletion('test-completion');
+      expect(completion).toBeDefined();
+      expect(completion?.name).toBe('test-completion');
+      expect(completion?.supportedTypes).toEqual(['ref/prompt']);
+    });
+
+    it('should handle completion requests through internal API', async () => {
+      const handler: CompletionHandler = vi.fn().mockResolvedValue({
+        completion: { 
+          values: [
+            { value: 'option1', label: 'Option 1', insertText: 'opt1' },
+            { value: 'option2', label: 'Option 2' }
+          ], 
+          total: 2, 
+          hasMore: false 
+        }
+      });
+
+      server.registerCompletion({
+        name: 'test-completion',
+        supportedTypes: ['ref/prompt']
+      }, handler);
+
+      // Register a test prompt
+      server.registerPrompt('test-prompt', {
+        title: 'Test Prompt',
+        description: 'A test prompt'
+      }, vi.fn());
+
+      // Test completion through internal API
+      const result = await server.getCompletions(
+        { type: 'ref/prompt', name: 'test-prompt' },
+        { name: 'arg1', value: 'val1' }
+      );
+      
+      // Verify the handler was called with correct parameters
+      expect(handler).toHaveBeenCalledWith({
+        ref: { type: 'ref/prompt', name: 'test-prompt' },
+        argument: { name: 'arg1', value: 'val1' }
+      });
+      
+      // Verify the response
+      expect(result).toEqual({
+        completion: {
+          values: [
+            { value: 'option1', label: 'Option 1', insertText: 'opt1' },
+            { value: 'option2', label: 'Option 2' }
+          ],
+          total: 2,
+          hasMore: false
+        }
+      });
     });
 
     it('should not register duplicate request handlers', () => {

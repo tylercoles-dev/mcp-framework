@@ -19,8 +19,8 @@ describe('Resource Template System', () => {
     if (!vi.isMockFunction(mockSDKServer.registerResource)) {
       mockSDKServer.registerResource = vi.fn();
     }
-    if (!vi.isMockFunction(mockSDKServer.notification)) {
-      mockSDKServer.notification = vi.fn();
+    if (!vi.isMockFunction(mockSDKServer.server.notification)) {
+      mockSDKServer.server.notification = vi.fn();
     }
   });
 
@@ -295,8 +295,8 @@ describe('Resource Template System', () => {
       if (!vi.isMockFunction(mockSDKServer.registerResource)) {
         mockSDKServer.registerResource = vi.fn();
       }
-      if (!vi.isMockFunction(mockSDKServer.notification)) {
-        mockSDKServer.notification = vi.fn();
+      if (!vi.isMockFunction(mockSDKServer.server.notification)) {
+        mockSDKServer.server.notification = vi.fn();
       }
       
       // Clear any calls from server initialization
@@ -514,7 +514,7 @@ describe('Resource Template System', () => {
       // Give it a moment for the async notification to be sent
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(mockSDKServer.notification).toHaveBeenCalledWith({
+      expect(mockSDKServer.server.notification).toHaveBeenCalledWith({
         method: 'notifications/resources/list_changed',
         params: {}
       });
