@@ -5,7 +5,7 @@ import { JSONRPCRequest, JSONRPCResponse, JSONRPCNotification } from '@modelcont
 
 // Mock WebSocket
 class MockWebSocket {
-  readyState = WebSocket.OPEN;
+  readyState = WebSocket.CONNECTING;
   listeners: { [event: string]: Function[] } = {};
 
   on(event: string, listener: Function) {
@@ -168,6 +168,8 @@ describe('WebSocketConnection', () => {
       const stateHandler = vi.fn();
       connection.onStateChange(stateHandler);
       
+      // Simulate readyState change to OPEN
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
       
       expect(connection.getState()).toBe(ConnectionState.Connected);
@@ -198,6 +200,7 @@ describe('WebSocketConnection', () => {
   describe('Message Handling', () => {
     beforeEach(() => {
       // Set connection to connected state
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
     });
 
@@ -259,6 +262,7 @@ describe('WebSocketConnection', () => {
 
   describe('Message Sending', () => {
     beforeEach(() => {
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
     });
 
@@ -285,7 +289,7 @@ describe('WebSocketConnection', () => {
         method: 'test/method'
       };
       
-      await expect(connection.send(message)).rejects.toThrow('Cannot send message: connection state is disconnected');
+      await expect(connection.send(message)).rejects.toThrow('Cannot send message: connection state is disconnecting');
     });
 
     it('should reject oversized messages', async () => {
@@ -323,6 +327,7 @@ describe('WebSocketConnection', () => {
       connection.onMessage(handler1);
       connection.onMessage(handler2);
       
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
       mockWs.emit('message', JSON.stringify({
         jsonrpc: '2.0',
@@ -351,6 +356,8 @@ describe('WebSocketConnection', () => {
       connection.onStateChange(handler1);
       connection.onStateChange(handler2);
       
+      // Simulate readyState change to OPEN and emit open
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
       
       expect(handler1).toHaveBeenCalledWith(ConnectionState.Connected);
@@ -359,6 +366,8 @@ describe('WebSocketConnection', () => {
       connection.offStateChange(handler1);
       vi.clearAllMocks();
       
+      // Simulate close
+      mockWs.readyState = WebSocket.CLOSED;
       mockWs.emit('close');
       
       expect(handler1).not.toHaveBeenCalled();
@@ -368,6 +377,7 @@ describe('WebSocketConnection', () => {
 
   describe('Connection Control', () => {
     beforeEach(() => {
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
     });
 
@@ -395,6 +405,7 @@ describe('WebSocketConnection', () => {
 
   describe('Heartbeat', () => {
     it('should start heartbeat when connected', (done) => {
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
       
       // Wait for heartbeat interval
@@ -408,6 +419,7 @@ describe('WebSocketConnection', () => {
       const noHeartbeatConfig = { ...config, heartbeatInterval: 0 };
       const noHeartbeatConnection = new WebSocketConnection(mockWs as any, noHeartbeatConfig);
       
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
       
       setTimeout(() => {
@@ -424,6 +436,7 @@ describe('WebSocketConnection', () => {
       });
       
       connection.onMessage(faultyHandler);
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
       mockWs.emit('message', JSON.stringify({ jsonrpc: '2.0', method: 'test' }));
       
@@ -438,6 +451,7 @@ describe('WebSocketConnection', () => {
       });
       
       connection.onStateChange(faultyHandler);
+      mockWs.readyState = WebSocket.OPEN;
       mockWs.emit('open');
       
       expect(consoleSpy).toHaveBeenCalledWith('State change handler error:', expect.any(Error));

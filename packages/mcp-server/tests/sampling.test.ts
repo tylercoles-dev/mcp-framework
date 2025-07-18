@@ -92,6 +92,9 @@ describe('MCP Sampling System', () => {
         content: { type: 'text', text: 'Response' }
       });
 
+      // Clear mock after server construction (logging handler was registered)
+      mockSDKServer.setRequestHandler.mockClear();
+
       server.registerSampling({ createMessage: mockHandler });
 
       expect(mockSDKServer.setRequestHandler).toHaveBeenCalledTimes(1);
@@ -307,7 +310,9 @@ describe('MCP Sampling System', () => {
           })
         })
       );
-    });\n\n    it('should apply default temperature from server range', async () => {
+    });
+
+    it('should apply default temperature from server range', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',
@@ -323,7 +328,24 @@ describe('MCP Sampling System', () => {
           temperature: 1.0 // (0.0 + 2.0) / 2
         })
       );
-    });\n  });\n\n  describe('Request Validation', () => {\n    beforeEach(() => {\n      const mockHandler: SamplingHandler = vi.fn().mockResolvedValue({\n        role: 'assistant',\n        content: { type: 'text', text: 'Response' }\n      });\n\n      server.registerSampling({\n        createMessage: mockHandler,\n        maxTokensLimit: 1000,\n        temperatureRange: { min: 0.1, max: 1.8 }\n      });\n    });\n\n    it('should validate required messages array', async () => {
+    });
+  });
+
+  describe('Request Validation', () => {
+    beforeEach(() => {
+      const mockHandler: SamplingHandler = vi.fn().mockResolvedValue({
+        role: 'assistant',
+        content: { type: 'text', text: 'Response' }
+      });
+
+      server.registerSampling({
+        createMessage: mockHandler,
+        maxTokensLimit: 1000,
+        temperatureRange: { min: 0.1, max: 1.8 }
+      });
+    });
+
+    it('should validate required messages array', async () => {
       const invalidRequests = [
         { messages: [] },
         { messages: undefined as any },
@@ -337,7 +359,9 @@ describe('MCP Sampling System', () => {
           })
         );
       }
-    });\n\n    it('should validate message roles', async () => {
+    });
+
+    it('should validate message roles', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'invalid' as any,
@@ -350,7 +374,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Invalid role at message 0')
         })
       );
-    });\n\n    it('should validate message content types', async () => {
+    });
+
+    it('should validate message content types', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',
@@ -366,7 +392,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Invalid content type at message 0')
         })
       );
-    });\n\n    it('should validate text message content', async () => {
+    });
+
+    it('should validate text message content', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',
@@ -382,7 +410,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Text message at index 0 must have text content')
         })
       );
-    });\n\n    it('should validate image message content', async () => {
+    });
+
+    it('should validate image message content', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',
@@ -399,7 +429,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Image message at index 0 must have data and mimeType')
         })
       );
-    });\n\n    it('should validate model preferences ranges', async () => {
+    });
+
+    it('should validate model preferences ranges', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',
@@ -415,7 +447,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Cost priority must be between 0 and 1')
         })
       );
-    });\n\n    it('should validate temperature against server limits', async () => {
+    });
+
+    it('should validate temperature against server limits', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',
@@ -429,7 +463,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Temperature must be between 0.1 and 1.8')
         })
       );
-    });\n\n    it('should validate max tokens against server limits', async () => {
+    });
+
+    it('should validate max tokens against server limits', async () => {
       const request: SamplingRequest = {
         messages: [{
           role: 'user',
@@ -443,7 +479,11 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Max tokens cannot exceed 1000')
         })
       );
-    });\n  });\n\n  describe('Response Validation', () => {\n    it('should validate sampling response format', async () => {
+    });
+  });
+
+  describe('Response Validation', () => {
+    it('should validate sampling response format', async () => {
       const invalidHandler: SamplingHandler = vi.fn().mockResolvedValue({
         role: 'user', // Invalid: should be 'assistant'
         content: { type: 'text', text: 'Response' }
@@ -463,7 +503,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Sampling response role must be assistant')
         })
       );
-    });\n\n    it('should validate response content format', async () => {
+    });
+
+    it('should validate response content format', async () => {
       const invalidHandler: SamplingHandler = vi.fn().mockResolvedValue({
         role: 'assistant',
         content: {
@@ -486,7 +528,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Sampling response content must be text type')
         })
       );
-    });\n\n    it('should validate usage statistics format', async () => {
+    });
+
+    it('should validate usage statistics format', async () => {
       const invalidHandler: SamplingHandler = vi.fn().mockResolvedValue({
         role: 'assistant',
         content: { type: 'text', text: 'Response' },
@@ -509,7 +553,11 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Invalid input tokens count')
         })
       );
-    });\n  });\n\n  describe('Error Handling', () => {\n    it('should handle sampling when not configured', async () => {
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle sampling when not configured', async () => {
       // Don't register sampling
       const request: SamplingRequest = {
         messages: [{
@@ -521,7 +569,9 @@ describe('MCP Sampling System', () => {
       await expect(server.createSamplingMessage(request)).rejects.toThrow(
         MCPErrorFactory.invalidRequest('Sampling is not configured on this server')
       );
-    });\n\n    it('should handle handler errors gracefully', async () => {
+    });
+
+    it('should handle handler errors gracefully', async () => {
       const faultyHandler: SamplingHandler = vi.fn().mockRejectedValue(
         new Error('Model API error')
       );
@@ -540,7 +590,9 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Sampling failed: Model API error')
         })
       );
-    });\n\n    it('should handle unknown handler errors', async () => {
+    });
+
+    it('should handle unknown handler errors', async () => {
       const faultyHandler: SamplingHandler = vi.fn().mockRejectedValue(
         'Unknown error type'
       );
@@ -559,4 +611,39 @@ describe('MCP Sampling System', () => {
           message: expect.stringContaining('Sampling failed with unknown error')
         })
       );
-    });\n  });\n\n  describe('Capabilities Integration', () => {\n    it('should include sampling in capabilities when configured', () => {\n      const mockHandler: SamplingHandler = vi.fn();\n      \n      server.registerSampling({\n        createMessage: mockHandler,\n        includeContext: true,\n        supportedModels: ['gpt-4']\n      });\n\n      const capabilities = server.getCapabilities();\n      \n      expect(capabilities.sampling).toBeDefined();\n      expect(capabilities.sampling?.includeContext).toBe(true);\n      expect(capabilities.sampling?.supportedModels).toEqual(['gpt-4']);\n    });\n\n    it('should not include sampling in capabilities when not configured', () => {\n      const capabilities = server.getCapabilities();\n      \n      expect(capabilities.sampling).toBeUndefined();\n    });\n\n    it('should report sampling availability correctly', () => {\n      expect(server.isSamplingAvailable()).toBe(false);\n      \n      const mockHandler: SamplingHandler = vi.fn();\n      server.registerSampling({ createMessage: mockHandler });\n      \n      expect(server.isSamplingAvailable()).toBe(true);\n    });\n  });\n});
+    });
+  });
+
+  describe('Capabilities Integration', () => {
+    it('should include sampling in capabilities when configured', () => {
+      const mockHandler: SamplingHandler = vi.fn();
+      
+      server.registerSampling({
+        createMessage: mockHandler,
+        includeContext: true,
+        supportedModels: ['gpt-4']
+      });
+
+      const capabilities = server.getCapabilities();
+      
+      expect(capabilities.sampling).toBeDefined();
+      expect(capabilities.sampling?.includeContext).toBe(true);
+      expect(capabilities.sampling?.supportedModels).toEqual(['gpt-4']);
+    });
+
+    it('should not include sampling in capabilities when not configured', () => {
+      const capabilities = server.getCapabilities();
+      
+      expect(capabilities.sampling).toBeUndefined();
+    });
+
+    it('should report sampling availability correctly', () => {
+      expect(server.isSamplingAvailable()).toBe(false);
+      
+      const mockHandler: SamplingHandler = vi.fn();
+      server.registerSampling({ createMessage: mockHandler });
+      
+      expect(server.isSamplingAvailable()).toBe(true);
+    });
+  });
+});

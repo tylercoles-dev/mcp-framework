@@ -270,8 +270,8 @@ export class SessionManager {
       accessCount: (existing?.accessCount ?? 0) + 1
     };
 
-    // Check if we need to remove old sessions to make room
-    if (this.sessions.size >= this.config.maxSessions && !existing) {
+    // Check if we need to remove old sessions to make room for a new session
+    if (!existing && this.sessions.size >= this.config.maxSessions) {
       this.evictOldestSession();
     }
 
@@ -355,7 +355,7 @@ export class SessionManager {
    */
   private evictOldestSession(): boolean {
     let oldestKey: string | null = null;
-    let oldestTime = Date.now();
+    let oldestTime = Number.MAX_SAFE_INTEGER;
 
     for (const [key, sessionData] of this.sessions.entries()) {
       if (sessionData.lastAccessedAt < oldestTime) {
@@ -1049,9 +1049,9 @@ export class MCPServer {
     this.loggingConfig = {
       level: config.logging?.level || LogLevel.Info,
       structured: config.logging?.structured || false,
-      includeTimestamp: config.logging?.includeTimestamp || true,
+      includeTimestamp: config.logging?.includeTimestamp !== undefined ? config.logging.includeTimestamp : true,
       includeSource: config.logging?.includeSource || false,
-      maxMessageLength: config.logging?.maxMessageLength || 8192,
+      maxMessageLength: config.logging?.hasOwnProperty('maxMessageLength') ? config.logging.maxMessageLength : 8192,
       loggers: new Map()
     };
 
@@ -1217,9 +1217,14 @@ export class MCPServer {
   setContext(context: Partial<ToolContext>): void {
     this.context = { ...this.context, ...context };
     
-    // Store session if session management is enabled
-    if (this.sessionManager) {
-      this.sessionManager.storeSession(this.context);
+    // Store session if session management is enabled and context has session ID
+    if (this.sessionManager && this.context.sessionId) {
+      // Get existing session context to merge with
+      const existingSession = this.sessionManager.retrieveSession(this.context);
+      const sessionContext = existingSession ? 
+        { ...existingSession, ...this.context } : 
+        this.context;
+      this.sessionManager.storeSession(sessionContext);
     }
   }
 
@@ -1499,8 +1504,21 @@ export class MCPServer {
     total?: number,
     message?: string
   ): Promise<void> {
-    // TODO: Implement proper notification sending when SDK server API is available
-    console.debug('Progress notification:', { progressToken, progress, total, message });
+    if (this.sdkServer.notification) {
+      try {
+        await this.sdkServer.notification({
+          method: 'notifications/progress',
+          params: {
+            progressToken,
+            progress,
+            ...(total !== undefined && { total }),
+            ...(message && { message })
+          }
+        });
+      } catch (error) {
+        console.error('Failed to send progress notification:', error);
+      }
+    }
   }
 
   /**
@@ -1511,8 +1529,15 @@ export class MCPServer {
     data: any,
     logger?: string
   ): Promise<void> {
-    // TODO: Implement proper notification sending when SDK server API is available
-    console.debug('Log notification:', { level, logger, data });
+    // Send log notification via SDK server
+    await this.sdkServer.notification({
+      method: 'notifications/message',
+      params: {
+        level,
+        logger,
+        data
+      }
+    });
   }
 
   /**
@@ -1522,49 +1547,106 @@ export class MCPServer {
     requestId: string,
     reason?: string
   ): Promise<void> {
-    // TODO: Implement proper notification sending when SDK server API is available
-    console.debug('Cancellation notification:', { requestId, reason });
+    if (this.sdkServer.notification) {
+      try {
+        await this.sdkServer.notification({
+          method: 'notifications/cancelled',
+          params: {
+            requestId,
+            ...(reason && { reason })
+          }
+        });
+      } catch (error) {
+        console.error('Failed to send cancellation notification:', error);
+      }
+    }
   }
 
   /**
    * Send notification that resource list has changed
    */
   async sendResourceListChangedNotification(): Promise<void> {
-    // TODO: Implement proper notification sending when SDK server API is available
-    console.debug('Resource list changed notification');
+    if (this.sdkServer.notification) {
+      try {
+        await this.sdkServer.notification({
+          method: 'notifications/resources/list_changed',
+          params: {}
+        });
+      } catch (error) {
+        console.error('Failed to send resource list changed notification:', error);
+      }
+    }
   }
 
   /**
    * Send notification that a resource has been updated
    */
   async sendResourceUpdatedNotification(uri: string): Promise<void> {
-    // TODO: Implement proper notification sending when SDK server API is available
-    console.debug('Resource updated notification:', { uri });
+    if (this.sdkServer.notification) {
+      try {
+        await this.sdkServer.notification({
+          method: 'notifications/resources/updated',
+          params: { uri }
+        });
+      } catch (error) {
+        console.error('Failed to send resource updated notification:', error);
+      }
+    }
   }
 
   /**
    * Send notification that tool list has changed
    */
   async sendToolListChangedNotification(): Promise<void> {
-    // TODO: Implement proper notification sending when SDK server API is available
-    console.debug('Tool list changed notification');
+    if (this.sdkServer.notification) {
+      try {
+        await this.sdkServer.notification({
+          method: 'notifications/tools/list_changed',
+          params: {}
+        });
+      } catch (error) {
+        console.error('Failed to send tool list changed notification:', error);
+      }
+    }
   }
 
   /**
    * Send notification that prompt list has changed
    */
   async sendPromptListChangedNotification(): Promise<void> {
-    // TODO: Implement proper notification sending when SDK server API is available
-    console.debug('Prompt list changed notification');
+    if (this.sdkServer.notification) {
+      try {
+        await this.sdkServer.notification({
+          method: 'notifications/prompts/list_changed',
+          params: {}
+        });
+      } catch (error) {
+        console.error('Failed to send prompt list changed notification:', error);
+      }
+    }
   }
 
   /**
    * Register logging endpoints with the SDK server
    */
   private registerLoggingEndpoints(): void {
-    // TODO: Register logging/setLevel endpoint when SDK server API is available
-    // The SDK server doesn't have a setRequestHandler method
-    // This needs to be implemented properly based on the actual SDK API
+    // Register logging/setLevel endpoint 
+    const LoggingRequestSchema = z.object({
+      method: z.literal('logging/setLevel'),
+      params: z.object({
+        level: z.string(),
+        logger: z.string().optional()
+      })
+    });
+
+    if (this.sdkServer.setRequestHandler) {
+      this.sdkServer.setRequestHandler(LoggingRequestSchema, async (request: any) => {
+        const { level, logger } = request.params;
+        const logLevel = this.nameToLogLevel(level);
+        await this.setLogLevel(logLevel, logger);
+        return { success: true };
+      });
+    }
   }
 
   /**
@@ -1623,14 +1705,17 @@ export class MCPServer {
     requestId?: string,
     sessionId?: string
   ): Promise<void> {
+    // Normalize invalid log levels to Info for validation and processing
+    const normalizedLevel = this.isValidLogLevel(level) ? level : LogLevel.Info;
+    
     // Check if this log should be sent based on level filtering
-    if (!this.shouldLog(level, logger)) {
+    if (!this.shouldLog(normalizedLevel, logger)) {
       return;
     }
 
     // Truncate message if too long
     let finalMessage = message;
-    if (this.loggingConfig.maxMessageLength && message.length > this.loggingConfig.maxMessageLength) {
+    if (this.loggingConfig.maxMessageLength != null && message.length > this.loggingConfig.maxMessageLength) {
       finalMessage = message.substring(0, this.loggingConfig.maxMessageLength - 3) + '...';
     }
 
@@ -1638,8 +1723,8 @@ export class MCPServer {
       // Send structured log
       const logEntry: StructuredLogEntry = {
         timestamp: this.loggingConfig.includeTimestamp ? new Date().toISOString() : '',
-        level,
-        levelName: this.logLevelToName(level),
+        level: normalizedLevel,
+        levelName: this.logLevelToName(normalizedLevel),
         logger,
         message: finalMessage,
         data,
@@ -1649,14 +1734,14 @@ export class MCPServer {
       };
 
       await this.sendLogNotification(
-        this.logLevelToName(level),
+        this.logLevelToName(normalizedLevel),
         logEntry,
         logger
       );
     } else {
       // Send simple log
       await this.sendLogNotification(
-        this.logLevelToName(level),
+        this.logLevelToName(normalizedLevel),
         data ? { message: finalMessage, data } : finalMessage,
         logger
       );
@@ -1699,12 +1784,33 @@ export class MCPServer {
   }
 
   /**
+   * Check if a log level is valid
+   */
+  private isValidLogLevel(level: LogLevel): boolean {
+    return level >= LogLevel.Emergency && level <= LogLevel.Debug;
+  }
+
+  /**
    * Check if a log should be sent based on level filtering
    */
   private shouldLog(level: LogLevel, logger?: string): boolean {
-    if (logger && this.loggingConfig.loggers.has(logger)) {
-      return level <= this.loggingConfig.loggers.get(logger)!;
+    if (logger) {
+      // First try exact match
+      if (this.loggingConfig.loggers.has(logger)) {
+        return level <= this.loggingConfig.loggers.get(logger)!;
+      }
+      
+      // Then try hierarchical matching (e.g., 'app.debug' -> 'app')
+      const parts = logger.split('.');
+      for (let i = parts.length - 1; i > 0; i--) {
+        const parentLogger = parts.slice(0, i).join('.');
+        if (this.loggingConfig.loggers.has(parentLogger)) {
+          return level <= this.loggingConfig.loggers.get(parentLogger)!;
+        }
+      }
     }
+    
+    // Fall back to global level
     return level <= this.loggingConfig.level;
   }
 
@@ -1722,6 +1828,23 @@ export class MCPServer {
       case LogLevel.Info: return 'info';
       case LogLevel.Debug: return 'debug';
       default: return 'info';
+    }
+  }
+
+  /**
+   * Convert log level name to LogLevel enum
+   */
+  private nameToLogLevel(levelName: string): LogLevel {
+    switch (levelName.toLowerCase()) {
+      case 'emergency': return LogLevel.Emergency;
+      case 'alert': return LogLevel.Alert;
+      case 'critical': return LogLevel.Critical;
+      case 'error': return LogLevel.Error;
+      case 'warning': return LogLevel.Warning;
+      case 'notice': return LogLevel.Notice;
+      case 'info': return LogLevel.Info;
+      case 'debug': return LogLevel.Debug;
+      default: return LogLevel.Info;
     }
   }
 
@@ -2409,7 +2532,7 @@ export class MCPServer {
     }
 
     // Validate max tokens limit if provided
-    if (config.maxTokensLimit && (typeof config.maxTokensLimit !== 'number' || config.maxTokensLimit <= 0)) {
+    if (config.maxTokensLimit !== undefined && (typeof config.maxTokensLimit !== 'number' || config.maxTokensLimit <= 0)) {
       throw MCPErrorFactory.invalidParams('Max tokens limit must be a positive number');
     }
 
@@ -2444,9 +2567,12 @@ export class MCPServer {
       })
     });
 
-    // TODO: Register sampling handler with SDK server
-    // The SDK server doesn't have a setRequestHandler method
-    // This needs to be implemented properly based on the actual SDK API
+    // Register sampling handler with SDK server (skip in test environment)
+    if (this.sdkServer.setRequestHandler) {
+      this.sdkServer.setRequestHandler(SamplingRequestSchema, async (request: any) => {
+        return await this.handleSampling(request.params);
+      });
+    }
   }
 
   /**

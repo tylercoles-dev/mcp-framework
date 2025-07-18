@@ -107,6 +107,8 @@ describe('MCP Elicitation System', () => {
       autoReconnect: false
     };
     client = new MockElicitationClient(config);
+    // Mock console.error to suppress expected error logs during tests
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(async () => {
@@ -210,30 +212,36 @@ describe('MCP Elicitation System', () => {
     });
 
     it('should handle decline response', async () => {
+      // Create a new client to avoid interference from beforeEach handler
+      const declineClient = new MockElicitationClient(config);
+      
       const declineHandler: ElicitationHandler = vi.fn().mockResolvedValue({
         id: testRequest.id,
         action: ElicitationAction.Decline,
         reason: 'Information too sensitive'
       });
 
-      client.registerElicitationHandler(declineHandler);
+      declineClient.registerElicitationHandler(declineHandler);
 
-      const response = await client.handleElicitationRequest(testRequest);
+      const response = await declineClient.handleElicitationRequest(testRequest);
 
       expect(response.action).toBe(ElicitationAction.Decline);
       expect(response.reason).toBe('Information too sensitive');
     });
 
     it('should handle cancel response', async () => {
+      // Create a new client to avoid interference from beforeEach handler
+      const cancelClient = new MockElicitationClient(config);
+      
       const cancelHandler: ElicitationHandler = vi.fn().mockResolvedValue({
         id: testRequest.id,
         action: ElicitationAction.Cancel,
         reason: 'User cancelled'
       });
 
-      client.registerElicitationHandler(cancelHandler);
+      cancelClient.registerElicitationHandler(cancelHandler);
 
-      const response = await client.handleElicitationRequest(testRequest);
+      const response = await cancelClient.handleElicitationRequest(testRequest);
 
       expect(response.action).toBe(ElicitationAction.Cancel);
       expect(response.reason).toBe('User cancelled');
@@ -257,6 +265,9 @@ describe('MCP Elicitation System', () => {
     });
 
     it('should handle multiple handlers with fallback', async () => {
+      // Create a new client to avoid interference from beforeEach handler
+      const fallbackClient = new MockElicitationClient(config);
+      
       const faultyHandler: ElicitationHandler = vi.fn().mockRejectedValue(
         new Error('Handler failed')
       );
@@ -264,14 +275,18 @@ describe('MCP Elicitation System', () => {
       const workingHandler: ElicitationHandler = vi.fn().mockResolvedValue({
         id: testRequest.id,
         action: ElicitationAction.Accept,
-        values: { name: 'Fallback User' }
+        values: { 
+          name: 'Fallback User',
+          email: 'fallback@example.com',
+          age: 25
+        }
       });
 
       // Register faulty handler first
-      client.registerElicitationHandler(faultyHandler);
-      client.registerElicitationHandler(workingHandler);
+      fallbackClient.registerElicitationHandler(faultyHandler);
+      fallbackClient.registerElicitationHandler(workingHandler);
 
-      const response = await client.handleElicitationRequest(testRequest);
+      const response = await fallbackClient.handleElicitationRequest(testRequest);
 
       expect(response.action).toBe(ElicitationAction.Accept);
       expect(response.values?.name).toBe('Fallback User');
@@ -280,13 +295,16 @@ describe('MCP Elicitation System', () => {
     });
 
     it('should return cancel when no handlers succeed', async () => {
+      // Create a new client to avoid interference from beforeEach handler
+      const failClient = new MockElicitationClient(config);
+      
       const faultyHandler: ElicitationHandler = vi.fn().mockRejectedValue(
         new Error('Handler failed')
       );
 
-      client.registerElicitationHandler(faultyHandler);
+      failClient.registerElicitationHandler(faultyHandler);
 
-      const response = await client.handleElicitationRequest(testRequest);
+      const response = await failClient.handleElicitationRequest(testRequest);
 
       expect(response.action).toBe(ElicitationAction.Cancel);
       expect(response.reason).toBe('No elicitation handler available');
