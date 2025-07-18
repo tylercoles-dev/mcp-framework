@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
+    "module": "ESNext",
     "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
@@ -10,9 +10,14 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": true
+    "composite": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true
   },
-
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
   "include": ["*.ts"],
   "exclude": []
 }

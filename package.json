@@ -23,22 +23,22 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "build:order": "node tools/build-workspaces.js",
+    "build:order": "npx tsx tools/build-workspaces.ts",
     "test": "vitest run",
     "test:all": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "coverage:report": "node tools/coverage-report.js",
+    "coverage:report": "npx tsx tools/coverage-report.ts",
     "lint": "npm run lint --workspaces --if-present",
-    "clean": "node tools/clean-workspace.js",
+    "clean": "npx tsx tools/clean-workspace.ts",
     "dev": "npm run dev --workspaces --if-present",
     "typecheck": "tsc --noEmit",
-    "verify": "node tools/verify-workspaces.js",
-    "publish:packages": "npx ts-node --project tools/tsconfig.json tools/publish-packages.ts",
+    "verify": "npx tsx tools/verify-workspaces.ts",
+    "publish:packages": "npx tsx tools/publish-packages.ts",
     "prebuild": "rimraf --glob packages/**/tsconfig.tsbuildinfo examples/**/tsconfig.tsbuildinfo packages/**/dist examples/**/dist",
     "ws": "npm --workspaces",
     "ws:info": "npm ls --depth=0",
-    "security:audit": "node tools/security-audit.js"
+    "security:audit": "npx tsx tools/security-audit.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
