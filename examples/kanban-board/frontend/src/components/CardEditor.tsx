@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Priority, Tag, Comment } from '../types';
+import { getUserSettings, getAutoFillCommentAuthor, updateAutoFillCommentAuthor } from '../utils/localStorage';
 
 interface CardEditorProps {
   card: Card;
@@ -33,6 +34,32 @@ export const CardEditor: React.FC<CardEditorProps> = ({
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [autoFillAuthor, setAutoFillAuthor] = useState(true);
+
+  // Initialize auto-fill settings and comment author
+  useEffect(() => {
+    const autoFillEnabled = getAutoFillCommentAuthor();
+    setAutoFillAuthor(autoFillEnabled);
+    
+    if (autoFillEnabled) {
+      const userSettings = getUserSettings();
+      if (userSettings.name) {
+        setCommentAuthor(userSettings.name);
+      }
+    }
+  }, []);
+
+  // Update comment author when auto-fill setting changes
+  useEffect(() => {
+    if (autoFillAuthor) {
+      const userSettings = getUserSettings();
+      if (userSettings.name && !commentAuthor) {
+        setCommentAuthor(userSettings.name);
+      }
+    } else {
+      setCommentAuthor('');
+    }
+  }, [autoFillAuthor]);
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({
@@ -63,6 +90,18 @@ export const CardEditor: React.FC<CardEditorProps> = ({
     setNewComment('');
   };
 
+  const handleAutoFillToggle = (checked: boolean) => {
+    setAutoFillAuthor(checked);
+    updateAutoFillCommentAuthor(checked);
+    
+    if (checked) {
+      const userSettings = getUserSettings();
+      if (userSettings.name) {
+        setCommentAuthor(userSettings.name);
+      }
+    }
+  };
+
   const handleDelete = () => {
     onDelete(card.id);
     onClose();
@@ -86,8 +125,8 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 
         <div className="modal-content">
           <div className="card-editor-form">
-            {/* Title */}
-            <div className="form-group">
+            {/* Title - Full Width */}
+            <div className="form-group title-group">
               <label htmlFor="card-title">Title *</label>
               <input
                 id="card-title"
@@ -99,87 +138,94 @@ export const CardEditor: React.FC<CardEditorProps> = ({
               />
             </div>
 
-            {/* Description */}
-            <div className="form-group">
-              <label htmlFor="card-description">Description</label>
-              <textarea
-                id="card-description"
-                value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                placeholder="Card description"
-                rows={4}
-              />
-            </div>
-
-            {/* Priority and Assignment Row */}
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="card-priority">Priority</label>
-                <select
-                  id="card-priority"
-                  value={formData.priority}
-                  onChange={(e) => handleInputChange('priority', e.target.value as Priority)}
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="card-assigned">Assigned To</label>
-                <input
-                  id="card-assigned"
-                  type="text"
-                  value={formData.assigned_to}
-                  onChange={(e) => handleInputChange('assigned_to', e.target.value)}
-                  placeholder="Assignee name"
-                />
-              </div>
-            </div>
-
-            {/* Due Date */}
-            <div className="form-group">
-              <label htmlFor="card-due-date">Due Date</label>
-              <input
-                id="card-due-date"
-                type="date"
-                value={formData.due_date}
-                onChange={(e) => handleInputChange('due_date', e.target.value)}
-              />
-              {isOverdue && (
-                <div className="due-date-warning">
-                  ⚠️ This card is overdue
-                </div>
-              )}
-            </div>
-
-            {/* Tags */}
-            {card.tags.length > 0 && (
-              <div className="form-group">
-                <label>Tags</label>
-                <div className="tags">
-                  {card.tags.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="tag"
-                      style={{ backgroundColor: tag.color }}
-                    >
-                      {tag.name}
-                    </span>
-                  ))}
+            {/* Two Column Layout */}
+            <div className="card-editor-columns">
+              {/* Left Column - Description */}
+              <div className="card-editor-left">
+                <div className="form-group">
+                  <label htmlFor="card-description">Description</label>
+                  <textarea
+                    id="card-description"
+                    value={formData.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    placeholder="Card description"
+                    rows={8}
+                  />
                 </div>
               </div>
-            )}
 
-            {/* Card Meta Info */}
-            <div className="card-meta-info">
-              <div className="meta-item">
-                <strong>Created:</strong> {formatDate(card.created_at)}
-              </div>
-              <div className="meta-item">
-                <strong>Updated:</strong> {formatDate(card.updated_at)}
+              {/* Right Column - All Other Fields */}
+              <div className="card-editor-right">
+                {/* Priority */}
+                <div className="form-group">
+                  <label htmlFor="card-priority">Priority</label>
+                  <select
+                    id="card-priority"
+                    value={formData.priority}
+                    onChange={(e) => handleInputChange('priority', e.target.value as Priority)}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+
+                {/* Assigned To */}
+                <div className="form-group">
+                  <label htmlFor="card-assigned">Assigned To</label>
+                  <input
+                    id="card-assigned"
+                    type="text"
+                    value={formData.assigned_to}
+                    onChange={(e) => handleInputChange('assigned_to', e.target.value)}
+                    placeholder="Assignee name"
+                  />
+                </div>
+
+                {/* Due Date */}
+                <div className="form-group">
+                  <label htmlFor="card-due-date">Due Date</label>
+                  <input
+                    id="card-due-date"
+                    type="date"
+                    value={formData.due_date}
+                    onChange={(e) => handleInputChange('due_date', e.target.value)}
+                  />
+                  {isOverdue && (
+                    <div className="due-date-warning">
+                      ⚠️ This card is overdue
+                    </div>
+                  )}
+                </div>
+
+                {/* Tags */}
+                {card.tags.length > 0 && (
+                  <div className="form-group">
+                    <label>Tags</label>
+                    <div className="tags">
+                      {card.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="tag"
+                          style={{ backgroundColor: tag.color }}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Card Meta Info */}
+                <div className="card-meta-info">
+                  <div className="meta-item">
+                    <strong>Created:</strong> {formatDate(card.created_at)}
+                  </div>
+                  <div className="meta-item">
+                    <strong>Updated:</strong> {formatDate(card.updated_at)}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -190,14 +236,30 @@ export const CardEditor: React.FC<CardEditorProps> = ({
             
             {/* Add Comment */}
             <div className="add-comment">
-              <div className="form-row">
-                <input
-                  type="text"
-                  value={commentAuthor}
-                  onChange={(e) => setCommentAuthor(e.target.value)}
-                  placeholder="Your name (optional)"
-                  className="comment-author-input"
-                />
+              <div className="comment-author-section">
+                <div className="author-input-group">
+                  <input
+                    type="text"
+                    value={commentAuthor}
+                    onChange={(e) => setCommentAuthor(e.target.value)}
+                    placeholder="Your name (optional)"
+                    className="comment-author-input"
+                    disabled={autoFillAuthor}
+                  />
+                  <label className="auto-fill-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={autoFillAuthor}
+                      onChange={(e) => handleAutoFillToggle(e.target.checked)}
+                    />
+                    <span className="checkbox-label">Auto-fill from profile</span>
+                  </label>
+                </div>
+                {autoFillAuthor && !getUserSettings().name && (
+                  <div className="auto-fill-warning">
+                    <small>💡 Set your name in settings to auto-fill comments</small>
+                  </div>
+                )}
               </div>
               <div className="comment-input-group">
                 <textarea

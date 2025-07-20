@@ -4,15 +4,19 @@ import { BoardSelector } from './components/BoardSelector';
 import { CreateBoard } from './components/CreateBoard';
 import { BoardManager } from './components/BoardManager';
 import { ColumnManager } from './components/ColumnManager';
+import { UserSettings } from './components/UserSettings';
+import { UserAvatar } from './components/UserAvatar';
 import { useKanbanStore } from './store/kanban-store';
 import { useWebSocket } from './hooks/use-websocket';
 import { Tag, Comment } from './types';
+import { getSelectedBoardId, updateSelectedBoard, getUserSettings } from './utils/localStorage';
 import './App.css';
 
 function App() {
   const [showCreateBoard, setShowCreateBoard] = useState(false);
   const [showBoardManager, setShowBoardManager] = useState(false);
   const [showColumnManager, setShowColumnManager] = useState(false);
+  const [showUserSettings, setShowUserSettings] = useState(false);
 
   // Get state and actions from Zustand store
   const {
@@ -32,6 +36,24 @@ function App() {
 
   // Initialize WebSocket connection
   const wsClient = useWebSocket('ws://localhost:3002');
+
+  // Load saved board selection on mount
+  useEffect(() => {
+    const savedBoardId = getSelectedBoardId();
+    if (savedBoardId && boards.length > 0) {
+      const boardExists = boards.some(board => board.id === savedBoardId);
+      if (boardExists) {
+        setSelectedBoard(savedBoardId);
+      }
+    }
+  }, [boards, setSelectedBoard]);
+
+  // Save board selection when it changes
+  useEffect(() => {
+    if (selectedBoard !== null) {
+      updateSelectedBoard(selectedBoard);
+    }
+  }, [selectedBoard]);
 
   // Load tags and comments when board changes
   useEffect(() => {
@@ -143,11 +165,15 @@ function App() {
     }
   };
 
-  const handleCreateColumn = async (boardId: number, name: string, position: number) => {
+  const handleCreateColumn = async (boardId: number, name: string, position: number, color?: string) => {
     if (!wsClient) return;
     
     try {
-      await wsClient.createColumn({ board_id: boardId, name, position });
+      const result = await wsClient.createColumn({ board_id: boardId, name, position });
+      // If a color was specified and we got a column back, update it with the color
+      if (color && result?.column?.id) {
+        await wsClient.updateColumn(result.column.id, { color });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create column');
     }
@@ -255,6 +281,7 @@ function App() {
               </button>
             </>
           )}
+          <UserAvatar onClick={() => setShowUserSettings(true)} />
         </div>
       </header>
 
@@ -289,6 +316,12 @@ function App() {
           onUpdateColumn={handleUpdateColumn}
           onDeleteColumn={handleDeleteColumn}
           onClose={() => setShowColumnManager(false)}
+        />
+      )}
+
+      {showUserSettings && (
+        <UserSettings
+          onClose={() => setShowUserSettings(false)}
         />
       )}
 

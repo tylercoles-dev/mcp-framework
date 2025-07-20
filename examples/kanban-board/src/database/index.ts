@@ -239,6 +239,16 @@ export class KanbanDatabase {
       .execute();
   }
 
+  async getColumn(id: number): Promise<Column | undefined> {
+    const result = await this.db
+      .selectFrom('columns')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    return result as Column | undefined;
+  }
+
   async createColumn(column: Omit<Column, 'id' | 'created_at'>): Promise<Column & { id: number }> {
     const result = await this.db
       .insertInto('columns')

@@ -15,6 +15,9 @@ export function useWebSocket(wsUrl: string) {
     addBoard,
     updateBoard,
     removeBoard,
+    addColumn,
+    updateColumn,
+    removeColumn,
     addCard,
     updateCard,
     moveCard,
@@ -77,26 +80,17 @@ export function useWebSocket(wsUrl: string) {
 
         client.on('column_created', (column: Column) => {
           console.log('Column created event:', column);
-          // Reload board data to get proper column ordering
-          if (selectedBoard === column.board_id) {
-            loadBoardData(selectedBoard);
-          }
+          addColumn(column);
         });
 
         client.on('column_updated', (column: Column) => {
           console.log('Column updated event:', column);
-          // Reload board data to get proper column ordering
-          if (selectedBoard && column.board_id) {
-            loadBoardData(selectedBoard);
-          }
+          updateColumn(column);
         });
 
         client.on('column_deleted', (data: { column_id: number }) => {
           console.log('Column deleted event:', data);
-          // Reload board data to properly handle column deletion
-          if (selectedBoard) {
-            loadBoardData(selectedBoard);
-          }
+          removeColumn(data.column_id);
         });
 
         client.on('disconnect', () => {

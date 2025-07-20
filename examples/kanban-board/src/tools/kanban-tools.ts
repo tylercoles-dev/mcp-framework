@@ -302,6 +302,11 @@ export class KanbanTools {
         if (input.success) {
           const column = await this.db.createColumn(input.data as any);
 
+          // Broadcast the column creation to all clients connected to this board
+          if (this.wsServer) {
+            this.wsServer.broadcastToBoardClients(column.board_id!, 'column_created', column);
+          }
+
           return {
             content: [
               {
@@ -342,6 +347,11 @@ export class KanbanTools {
           throw new NotFoundError('Column', column_id);
         }
 
+        // Broadcast the column update to all clients connected to this board
+        if (this.wsServer) {
+          this.wsServer.broadcastToBoardClients(column.board_id!, 'column_updated', column);
+        }
+
         return {
           content: [
             {
@@ -372,10 +382,22 @@ export class KanbanTools {
     }, async (args: any): Promise<ToolResult> => {
       try {
         const { column_id } = args;
+        
+        // Get the column before deleting to get board_id for broadcasting
+        const column = await this.db.getColumn(column_id);
+        if (!column) {
+          throw new NotFoundError('Column', column_id);
+        }
+
         const deleted = await this.db.deleteColumn(column_id);
 
         if (!deleted) {
           throw new NotFoundError('Column', column_id);
+        }
+
+        // Broadcast the column deletion to all clients connected to this board
+        if (this.wsServer) {
+          this.wsServer.broadcastToBoardClients(column.board_id, 'column_deleted', { column_id });
         }
 
         return {
