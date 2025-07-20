@@ -1,5 +1,6 @@
 import { MCPServer, ToolResult } from '@tylercoles/mcp-server';
 import { KanbanDatabase, Board, Column, Card, Tag, Comment } from '../database';
+import { KanbanWebSocketServer } from '../websocket-server';
 import {
   CreateBoardSchema,
   UpdateBoardSchema,
@@ -27,7 +28,10 @@ import {
 } from '../types/index';
 
 export class KanbanTools {
-  constructor(private db: KanbanDatabase) { }
+  constructor(
+    private db: KanbanDatabase,
+    private wsServer?: KanbanWebSocketServer
+  ) { }
 
   registerTools(server: MCPServer) {
     // Board management tools
@@ -186,6 +190,11 @@ export class KanbanTools {
           description: input.description || null,
           color: input.color,
         });
+
+        // Broadcast to WebSocket clients
+        if (this.wsServer) {
+          this.wsServer.broadcastToAll('board_created', board);
+        }
 
         return {
           content: [
@@ -410,6 +419,14 @@ export class KanbanTools {
           due_date: input.due_date || null,
         });
 
+        // Broadcast to WebSocket clients
+        if (this.wsServer) {
+          console.log(`MCP Tool: Broadcasting card_created for board ${input.board_id}, card:`, card.title);
+          this.wsServer.broadcastToBoardClients(input.board_id, 'card_created', card);
+        } else {
+          console.log('MCP Tool: No WebSocket server available for broadcasting');
+        }
+
         return {
           content: [
             {
@@ -447,6 +464,11 @@ export class KanbanTools {
           throw new NotFoundError('Card', card_id);
         }
 
+        // Broadcast to WebSocket clients
+        if (this.wsServer) {
+          this.wsServer.broadcastToBoardClients(card.board_id!, 'card_updated', card);
+        }
+
         return {
           content: [
             {
@@ -481,6 +503,11 @@ export class KanbanTools {
 
         if (!card) {
           throw new NotFoundError('Card', input.card_id);
+        }
+
+        // Broadcast to WebSocket clients
+        if (this.wsServer) {
+          this.wsServer.broadcastToBoardClients(card.board_id!, 'card_moved', card);
         }
 
         return {

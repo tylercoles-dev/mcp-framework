@@ -1,73 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { KanbanBoard } from './components/KanbanBoard';
 import { BoardSelector } from './components/BoardSelector';
 import { CreateBoard } from './components/CreateBoard';
-import { MCPClient } from './services/mcp-client';
-import { MCPStreamingClient } from './services/mcp-client-streaming';
-import { Board, KanbanBoardData } from './types';
+import { BoardManager } from './components/BoardManager';
+import { ColumnManager } from './components/ColumnManager';
+import { useKanbanStore } from './store/kanban-store';
+import { useWebSocket } from './hooks/use-websocket';
 import './App.css';
 
-// Toggle between regular and streaming client
-const useStreaming = window.location.search.includes('streaming=true');
-const mcpClient = useStreaming 
-  ? new MCPStreamingClient('http://localhost:3001')
-  : new MCPClient('http://localhost:3001');
-
 function App() {
-  const [boards, setBoards] = useState<Board[]>([]);
-  const [selectedBoard, setSelectedBoard] = useState<number | null>(null);
-  const [boardData, setBoardData] = useState<KanbanBoardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateBoard, setShowCreateBoard] = useState(false);
+  const [showBoardManager, setShowBoardManager] = useState(false);
+  const [showColumnManager, setShowColumnManager] = useState(false);
 
-  useEffect(() => {
-    loadBoards();
-  }, []);
+  // Get state and actions from Zustand store
+  const {
+    boards,
+    selectedBoard,
+    boardData,
+    loading,
+    error,
+    connected,
+    setSelectedBoard,
+    setError,
+  } = useKanbanStore();
 
-  useEffect(() => {
-    if (selectedBoard) {
-      loadBoardData(selectedBoard);
-    }
-  }, [selectedBoard]);
-
-  const loadBoards = async () => {
-    try {
-      setLoading(true);
-      const result = await mcpClient.callTool('get_boards', {});
-      if (result.structuredContent?.boards) {
-        setBoards(result.structuredContent.boards as Board[]);
-        if (!selectedBoard && result.structuredContent.boards.length > 0) {
-          setSelectedBoard(result.structuredContent.boards[0].id);
-        }
-      }
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load boards');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadBoardData = async (boardId: number) => {
-    try {
-      setLoading(true);
-      const result = await mcpClient.callTool('get_board', { board_id: boardId });
-      if (result.structuredContent) {
-        setBoardData(result.structuredContent as KanbanBoardData);
-      }
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load board data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Initialize WebSocket connection
+  const wsClient = useWebSocket('ws://localhost:3002');
 
   const handleCreateBoard = async (name: string, description: string, color: string) => {
+    if (!wsClient) return;
+    
     try {
-      await mcpClient.callTool('create_board', { name, description, color });
-      await loadBoards();
+      await wsClient.createBoard({ name, description, color });
       setShowCreateBoard(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create board');
@@ -75,58 +40,97 @@ function App() {
   };
 
   const handleCreateCard = async (columnId: number, title: string, description?: string) => {
-    if (!selectedBoard) return;
+    if (!selectedBoard || !wsClient) return;
     
     try {
-      await mcpClient.callTool('create_card', {
+      await wsClient.createCard({
         board_id: selectedBoard,
         column_id: columnId,
         title,
         description,
       });
-      await loadBoardData(selectedBoard);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create card');
     }
   };
 
   const handleMoveCard = async (cardId: number, columnId: number, position: number) => {
+    if (!wsClient) return;
+    
     try {
-      await mcpClient.callTool('move_card', {
-        card_id: cardId,
-        column_id: columnId,
-        position,
-      });
-      if (selectedBoard) {
-        await loadBoardData(selectedBoard);
-      }
+      await wsClient.moveCard(cardId, columnId, position);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to move card');
     }
   };
 
   const handleUpdateCard = async (cardId: number, updates: any) => {
+    if (!wsClient) return;
+    
     try {
-      await mcpClient.callTool('update_card', {
-        card_id: cardId,
-        ...updates,
-      });
-      if (selectedBoard) {
-        await loadBoardData(selectedBoard);
-      }
+      await wsClient.updateCard(cardId, updates);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update card');
     }
   };
 
   const handleDeleteCard = async (cardId: number) => {
+    if (!wsClient) return;
+    
     try {
-      await mcpClient.callTool('delete_card', { card_id: cardId });
-      if (selectedBoard) {
-        await loadBoardData(selectedBoard);
-      }
+      await wsClient.deleteCard(cardId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete card');
+    }
+  };
+
+  const handleUpdateBoard = async (boardId: number, updates: any) => {
+    if (!wsClient) return;
+    
+    try {
+      await wsClient.updateBoard(boardId, updates);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update board');
+    }
+  };
+
+  const handleDeleteBoard = async (boardId: number) => {
+    if (!wsClient) return;
+    
+    try {
+      await wsClient.deleteBoard(boardId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete board');
+    }
+  };
+
+  const handleCreateColumn = async (boardId: number, name: string, position: number) => {
+    if (!wsClient) return;
+    
+    try {
+      await wsClient.createColumn({ board_id: boardId, name, position });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create column');
+    }
+  };
+
+  const handleUpdateColumn = async (columnId: number, updates: any) => {
+    if (!wsClient) return;
+    
+    try {
+      await wsClient.updateColumn(columnId, updates);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update column');
+    }
+  };
+
+  const handleDeleteColumn = async (columnId: number) => {
+    if (!wsClient) return;
+    
+    try {
+      await wsClient.deleteColumn(columnId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete column');
     }
   };
 
@@ -142,7 +146,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🗂️ Kanban Board {useStreaming && <span style={{fontSize: '0.6em', color: '#4CAF50'}}>(Streaming Mode)</span>}</h1>
+        <h1>🗂️ Kanban Board <span style={{fontSize: '0.6em', color: connected ? '#4CAF50' : '#f44336'}}>({connected ? 'Real-time' : 'Disconnected'})</span></h1>
         <div className="header-controls">
           <BoardSelector
             boards={boards}
@@ -152,21 +156,28 @@ function App() {
           <button
             className="btn btn-primary"
             onClick={() => setShowCreateBoard(true)}
+            disabled={!connected}
           >
             + New Board
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              const newUrl = useStreaming 
-                ? window.location.pathname 
-                : window.location.pathname + '?streaming=true';
-              window.location.href = newUrl;
-            }}
-            style={{marginLeft: '10px'}}
-          >
-            {useStreaming ? 'Switch to JSON' : 'Switch to Streaming'}
-          </button>
+          {selectedBoard && boardData && (
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowBoardManager(true)}
+                disabled={!connected}
+              >
+                Manage Board
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowColumnManager(true)}
+                disabled={!connected}
+              >
+                Manage Columns
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -181,6 +192,26 @@ function App() {
         <CreateBoard
           onCreateBoard={handleCreateBoard}
           onCancel={() => setShowCreateBoard(false)}
+        />
+      )}
+
+      {showBoardManager && selectedBoard && boardData && (
+        <BoardManager
+          board={boardData.board}
+          onUpdateBoard={handleUpdateBoard}
+          onDeleteBoard={handleDeleteBoard}
+          onClose={() => setShowBoardManager(false)}
+        />
+      )}
+
+      {showColumnManager && selectedBoard && boardData && (
+        <ColumnManager
+          columns={boardData.columns}
+          boardId={selectedBoard}
+          onCreateColumn={handleCreateColumn}
+          onUpdateColumn={handleUpdateColumn}
+          onDeleteColumn={handleDeleteColumn}
+          onClose={() => setShowColumnManager(false)}
         />
       )}
 

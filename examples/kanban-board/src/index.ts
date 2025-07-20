@@ -4,6 +4,7 @@ import { MCPServer } from '@tylercoles/mcp-server';
 import { HttpTransport } from '@tylercoles/mcp-transport-http';
 import { KanbanDatabase, DatabaseConfig } from './database/index';
 import { KanbanTools } from './tools/kanban-tools';
+import { KanbanWebSocketServer } from './websocket-server';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,6 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Configuration
 const config = {
   port: parseInt(process.env.PORT || '3001'),
+  wsPort: parseInt(process.env.WS_PORT || '3002'),
   host: process.env.HOST || 'localhost',
   database: {
     type: (process.env.DB_TYPE as 'sqlite' | 'postgres' | 'mysql') || 'sqlite',
@@ -38,8 +40,11 @@ async function createKanbanServer() {
     version: '1.0.0',
   });
 
-  // Setup tools
-  const kanbanTools = new KanbanTools(db);
+  // Setup WebSocket server first
+  const wsServer = new KanbanWebSocketServer(config.wsPort, db);
+
+  // Setup tools with WebSocket server reference
+  const kanbanTools = new KanbanTools(db, wsServer);
   kanbanTools.registerTools(server);
 
   // Add a simple test tool to debug the issue
@@ -275,19 +280,17 @@ Use the kanban tools to analyze the current state and provide recommendations.`,
   server.useTransport(httpTransport);
 
   // Setup graceful shutdown
-  process.on('SIGINT', async () => {
+  const shutdown = async () => {
     console.log('\n🛑 Shutting down server...');
+    wsServer.close();
     await db.close();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', async () => {
-    console.log('\n🛑 Shutting down server...');
-    await db.close();
-    process.exit(0);
-  });
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
-  return { server, db };
+  return { server, db, wsServer };
 }
 
 async function main() {
@@ -295,14 +298,16 @@ async function main() {
     console.log('🚀 Starting Kanban Board MCP Server...');
     console.log(`📊 Database: ${config.database.type}`);
     console.log(`🌐 HTTP Server: http://${config.host}:${config.port}`);
+    console.log(`🔌 WebSocket Server: ws://${config.host}:${config.wsPort}`);
     
-    const { server, db } = await createKanbanServer();
+    const { server, db, wsServer } = await createKanbanServer();
     
     await server.start();
     
     console.log('✅ Kanban Board MCP Server is running!');
     console.log('\n📚 Available endpoints:');
     console.log(`   • MCP HTTP: http://${config.host}:${config.port}/mcp`);
+    console.log(`   • WebSocket: ws://${config.host}:${config.wsPort}`);
     console.log(`   • Health: http://${config.host}:${config.port}/health`);
     console.log(`   • Frontend: http://${config.host}:${config.port}/`);
     console.log('\n🛠️  Available tools:');
