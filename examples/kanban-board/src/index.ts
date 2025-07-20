@@ -174,6 +174,118 @@ async function createKanbanServer() {
     };
   });
 
+  // Individual card details resource
+  server.registerResourceTemplate('card-details', 'kanban://card/{card_id}', {
+    title: 'Card Details',
+    description: 'Detailed information about a specific card including comments',
+    mimeType: 'application/json',
+  }, async (uri: any) => {
+    const match = uri.match(/kanban:\/\/card\/(\d+)/);
+    if (!match) {
+      throw new Error('Invalid card URI format');
+    }
+    
+    const cardId = parseInt(match[1]);
+    const card = await db.getCardById(cardId);
+    if (!card) {
+      throw new Error(`Card ${cardId} not found`);
+    }
+
+    const comments = await db.getCardComments(cardId);
+    const tags = await db.getCardTags(cardId);
+    
+    const cardData = {
+      card,
+      comments,
+      tags
+    };
+
+    return {
+      contents: [{
+        uri,
+        mimeType: 'application/json',
+        text: JSON.stringify(cardData, null, 2),
+      }]
+    };
+  });
+
+  // Search results resource
+  server.registerResourceTemplate('search-results', 'kanban://search/{query}', {
+    title: 'Search Results',
+    description: 'Cards matching a search query',
+    mimeType: 'application/json',
+  }, async (uri: any) => {
+    const match = uri.match(/kanban:\/\/search\/(.+)/);
+    if (!match) {
+      throw new Error('Invalid search URI format');
+    }
+    
+    const query = decodeURIComponent(match[1]);
+    const cards = await db.searchCards(query);
+    
+    // Enhance cards with tags for each result
+    const cardsWithTags = await Promise.all(
+      cards.map(async (card) => {
+        const tags = await db.getCardTags(card.id!);
+        return { ...card, tags };
+      })
+    );
+
+    const searchResults = {
+      query,
+      total_results: cardsWithTags.length,
+      cards: cardsWithTags,
+      generated_at: new Date().toISOString(),
+    };
+
+    return {
+      contents: [{
+        uri,
+        mimeType: 'application/json',
+        text: JSON.stringify(searchResults, null, 2),
+      }]
+    };
+  });
+
+  // Recent activity resource
+  server.registerResource('recent-activity', 'kanban://activity', {
+    title: 'Recent Activity',
+    description: 'Recent changes and activities across all boards',
+    mimeType: 'application/json',
+  }, async () => {
+    const recentCards = await db.getRecentlyUpdatedCards(50);
+    
+    // Enhance with board and column information
+    const cardsWithContext = await Promise.all(
+      recentCards.map(async (card) => {
+        const tags = await db.getCardTags(card.id!);
+        const board = await db.getBoardById(card.board_id!);
+        const column = await db.getColumn(card.column_id!);
+        
+        return {
+          ...card,
+          tags,
+          board_name: board?.name,
+          column_name: column?.name
+        };
+      })
+    );
+
+    const activityData = {
+      recent_cards: cardsWithContext,
+      total_shown: cardsWithContext.length,
+      generated_at: new Date().toISOString(),
+    };
+
+    return {
+      contents: [{
+        uri: 'kanban://activity',
+        mimeType: 'application/json',
+        text: JSON.stringify(activityData, null, 2),
+      }]
+    };
+  });
+
   // Add prompts for common workflows
   server.registerPrompt('create_project_board', {
     title: 'Create Project Board',

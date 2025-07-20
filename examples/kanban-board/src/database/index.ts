@@ -429,6 +429,30 @@ export class KanbanDatabase {
     return Number(result.numDeletedRows) > 0;
   }
 
+  // Search operations
+  async searchCards(query: string): Promise<Card[]> {
+    const searchTerm = `%${query}%`;
+    return await this.db
+      .selectFrom('cards')
+      .selectAll()
+      .where((eb) => eb.or([
+        eb('title', 'like', searchTerm),
+        eb('description', 'like', searchTerm),
+        eb('assigned_to', 'like', searchTerm)
+      ]))
+      .orderBy('updated_at', 'desc')
+      .execute();
+  }
+
+  async getRecentlyUpdatedCards(limit: number = 50): Promise<Card[]> {
+    return await this.db
+      .selectFrom('cards')
+      .selectAll()
+      .orderBy('updated_at', 'desc')
+      .limit(limit)
+      .execute();
+  }
+
   // Utility method to close database connection
   async close(): Promise<void> {
     await this.db.destroy();
