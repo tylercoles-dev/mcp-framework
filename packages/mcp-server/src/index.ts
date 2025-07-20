@@ -1,4 +1,4 @@
-import { ResourceMetadata, McpServer as SDKMcpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ResourceMetadata, McpServer as SDKMcpServer, ToolCallback, ResourceTemplate as SDKResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol";
 import { CallToolResult, ServerNotification, ServerRequest, CompleteRequestSchema, CreateMessageRequestSchema, CompleteResult, CreateMessageResult } from "@modelcontextprotocol/sdk/types.js";
 import { z, ZodRawShape, ZodTypeAny } from "zod";
@@ -2143,7 +2143,9 @@ export class MCPServer {
       }
     };
 
-    this.sdkServer.registerResource(name, templateConfig.uriTemplate, config as any, wrappedHandler as any);
+    // Create proper ResourceTemplate object for MCP SDK
+    const resourceTemplate = new SDKResourceTemplate(templateConfig.uriTemplate, { list: undefined });
+    this.sdkServer.registerResource(name, resourceTemplate, config as any, wrappedHandler as any);
 
     // Notify that resource list has changed
     if (this.started) {
