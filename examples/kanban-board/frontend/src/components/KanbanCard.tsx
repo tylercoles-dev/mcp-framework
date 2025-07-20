@@ -1,26 +1,33 @@
 import React, { useState } from 'react';
-import { Card } from '../types';
+import { Card, Tag, Comment } from '../types';
+import { CardEditor } from './CardEditor';
 
 interface KanbanCardProps {
   card: Card;
   columnId: number;
   position: number;
+  availableTags: Tag[];
+  comments: Comment[];
   onMoveCard: (cardId: number, columnId: number, position: number) => void;
   onUpdateCard: (cardId: number, updates: any) => void;
   onDeleteCard: (cardId: number) => void;
+  onAddComment: (cardId: number, content: string, author?: string) => void;
+  onDeleteComment: (commentId: number) => void;
 }
 
 export const KanbanCard: React.FC<KanbanCardProps> = ({
   card,
   columnId,
   position,
+  availableTags,
+  comments,
   onMoveCard,
   onUpdateCard,
   onDeleteCard,
+  onAddComment,
+  onDeleteComment,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(card.title);
-  const [editDescription, setEditDescription] = useState(card.description || '');
+  const [showEditor, setShowEditor] = useState(false);
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData(
@@ -33,26 +40,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     );
   };
 
-  const handleSaveEdit = () => {
-    if (editTitle.trim()) {
-      onUpdateCard(card.id, {
-        title: editTitle.trim(),
-        description: editDescription.trim() || null,
-      });
-      setIsEditing(false);
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditTitle(card.title);
-    setEditDescription(card.description || '');
-    setIsEditing(false);
-  };
-
-  const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this card?')) {
-      onDeleteCard(card.id);
-    }
+  const handleOpenEditor = () => {
+    setShowEditor(true);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -72,62 +61,33 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   const isOverdue = card.due_date && new Date(card.due_date) < new Date();
 
   return (
-    <div
-      className={`kanban-card ${isOverdue ? 'overdue' : ''}`}
-      draggable={!isEditing}
-      onDragStart={handleDragStart}
-    >
-      <div className="card-header">
-        <div 
-          className="priority-indicator"
-          style={{ backgroundColor: getPriorityColor(card.priority) }}
-          title={`Priority: ${card.priority}`}
-        />
-        <div className="card-actions">
-          <button
-            className="btn-icon"
-            onClick={() => setIsEditing(true)}
-            title="Edit card"
-          >
-            ✏️
-          </button>
-          <button
-            className="btn-icon"
-            onClick={handleDelete}
-            title="Delete card"
-          >
-            🗑️
-          </button>
-        </div>
-      </div>
-
-      {isEditing ? (
-        <div className="card-edit">
-          <input
-            type="text"
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            className="edit-title"
-            placeholder="Card title"
-            autoFocus
+    <>
+      <div
+        className={`kanban-card ${isOverdue ? 'overdue' : ''}`}
+        draggable={true}
+        onDragStart={handleDragStart}
+        onClick={handleOpenEditor}
+      >
+        <div className="card-header">
+          <div 
+            className="priority-indicator"
+            style={{ backgroundColor: getPriorityColor(card.priority) }}
+            title={`Priority: ${card.priority}`}
           />
-          <textarea
-            value={editDescription}
-            onChange={(e) => setEditDescription(e.target.value)}
-            className="edit-description"
-            placeholder="Card description (optional)"
-            rows={3}
-          />
-          <div className="edit-actions">
-            <button className="btn btn-primary btn-sm" onClick={handleSaveEdit}>
-              Save
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={handleCancelEdit}>
-              Cancel
+          <div className="card-actions">
+            <button
+              className="btn-icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenEditor();
+              }}
+              title="Edit card"
+            >
+              ✏️
             </button>
           </div>
         </div>
-      ) : (
+
         <div className="card-content">
           <h4 className="card-title">{card.title}</h4>
           {card.description && (
@@ -160,9 +120,28 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                 ))}
               </div>
             )}
+
+            {comments.length > 0 && (
+              <div className="comment-indicator">
+                💬 {comments.length} comment{comments.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
         </div>
+      </div>
+
+      {showEditor && (
+        <CardEditor
+          card={card}
+          availableTags={availableTags}
+          comments={comments}
+          onSave={onUpdateCard}
+          onDelete={onDeleteCard}
+          onAddComment={onAddComment}
+          onDeleteComment={onDeleteComment}
+          onClose={() => setShowEditor(false)}
+        />
       )}
-    </div>
+    </>
   );
 };

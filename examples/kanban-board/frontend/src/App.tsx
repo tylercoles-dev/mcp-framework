@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { KanbanBoard } from './components/KanbanBoard';
 import { BoardSelector } from './components/BoardSelector';
 import { CreateBoard } from './components/CreateBoard';
@@ -6,6 +6,7 @@ import { BoardManager } from './components/BoardManager';
 import { ColumnManager } from './components/ColumnManager';
 import { useKanbanStore } from './store/kanban-store';
 import { useWebSocket } from './hooks/use-websocket';
+import { Tag, Comment } from './types';
 import './App.css';
 
 function App() {
@@ -25,8 +26,46 @@ function App() {
     setError,
   } = useKanbanStore();
 
+  // Local state for comments and tags
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [commentsData, setCommentsData] = useState<Record<number, Comment[]>>({});
+
   // Initialize WebSocket connection
   const wsClient = useWebSocket('ws://localhost:3002');
+
+  // Load tags and comments when board changes
+  useEffect(() => {
+    if (wsClient && selectedBoard && boardData) {
+      loadTagsAndComments();
+    }
+  }, [wsClient, selectedBoard, boardData]);
+
+  const loadTagsAndComments = async () => {
+    if (!wsClient || !boardData) return;
+
+    try {
+      // Load tags
+      const tagsResult = await wsClient.getTags();
+      setAvailableTags(tagsResult.tags || []);
+
+      // Load comments for all cards
+      const allComments: Record<number, Comment[]> = {};
+      for (const column of boardData.columns) {
+        for (const card of column.cards) {
+          try {
+            const commentsResult = await wsClient.getComments(card.id);
+            allComments[card.id] = commentsResult.comments || [];
+          } catch (err) {
+            console.warn(`Failed to load comments for card ${card.id}:`, err);
+            allComments[card.id] = [];
+          }
+        }
+      }
+      setCommentsData(allComments);
+    } catch (err) {
+      console.error('Failed to load tags and comments:', err);
+    }
+  };
 
   const handleCreateBoard = async (name: string, description: string, color: string) => {
     if (!wsClient) return;
@@ -134,6 +173,44 @@ function App() {
     }
   };
 
+  const handleAddComment = async (cardId: number, content: string, author?: string) => {
+    if (!wsClient) return;
+    
+    try {
+      await wsClient.addComment({ card_id: cardId, content, author });
+      // Reload comments for this card
+      const commentsResult = await wsClient.getComments(cardId);
+      setCommentsData(prev => ({
+        ...prev,
+        [cardId]: commentsResult.comments || []
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add comment');
+    }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (!wsClient) return;
+    
+    try {
+      await wsClient.deleteComment(commentId);
+      // Find the card that contained this comment and reload its comments
+      for (const [cardIdStr, comments] of Object.entries(commentsData)) {
+        const cardId = parseInt(cardIdStr);
+        if (comments.some(comment => comment.id === commentId)) {
+          const commentsResult = await wsClient.getComments(cardId);
+          setCommentsData(prev => ({
+            ...prev,
+            [cardId]: commentsResult.comments || []
+          }));
+          break;
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete comment');
+    }
+  };
+
   if (loading && !boardData) {
     return (
       <div className="loading">
@@ -219,10 +296,14 @@ function App() {
         {boardData ? (
           <KanbanBoard
             boardData={boardData}
+            availableTags={availableTags}
+            commentsData={commentsData}
             onCreateCard={handleCreateCard}
             onMoveCard={handleMoveCard}
             onUpdateCard={handleUpdateCard}
             onDeleteCard={handleDeleteCard}
+            onAddComment={handleAddComment}
+            onDeleteComment={handleDeleteComment}
             loading={loading}
           />
         ) : (

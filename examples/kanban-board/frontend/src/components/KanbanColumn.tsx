@@ -1,23 +1,31 @@
 import React, { useState } from 'react';
 import { KanbanCard } from './KanbanCard';
 import { CreateCard } from './CreateCard';
-import { Column } from '../types';
+import { Column, Tag, Comment } from '../types';
 
 interface KanbanColumnProps {
   column: Column;
+  availableTags: Tag[];
+  commentsData: Record<number, Comment[]>;
   onCreateCard: (columnId: number, title: string, description?: string) => void;
   onMoveCard: (cardId: number, columnId: number, position: number) => void;
   onUpdateCard: (cardId: number, updates: any) => void;
   onDeleteCard: (cardId: number) => void;
+  onAddComment: (cardId: number, content: string, author?: string) => void;
+  onDeleteComment: (commentId: number) => void;
   loading: boolean;
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   column,
+  availableTags,
+  commentsData,
   onCreateCard,
   onMoveCard,
   onUpdateCard,
   onDeleteCard,
+  onAddComment,
+  onDeleteComment,
   loading,
 }) => {
   const [showCreateCard, setShowCreateCard] = useState(false);
@@ -70,9 +78,13 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
             card={card}
             columnId={column.id}
             position={index}
+            availableTags={availableTags}
+            comments={commentsData[card.id] || []}
             onMoveCard={onMoveCard}
             onUpdateCard={onUpdateCard}
             onDeleteCard={onDeleteCard}
+            onAddComment={onAddComment}
+            onDeleteComment={onDeleteComment}
           />
         ))}
 
