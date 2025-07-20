@@ -61,21 +61,6 @@ async function createKanbanServer() {
   const kanbanTools = new KanbanTools(db, wsServer);
   kanbanTools.registerTools(server);
 
-  // Add a simple test tool to debug the issue
-  const { z } = await import('zod');
-  server.registerTool('test_simple', {
-    title: 'Simple Test Tool',
-    description: 'A simple test tool for debugging',
-    inputSchema: z.object({}),
-  }, async () => {
-    return {
-      content: [{
-        type: 'text',
-        text: 'Simple test successful'
-      }]
-    };
-  });
-
   // Add resources for board data access
   server.registerResource('all-boards', 'kanban://boards', {
     title: 'All Boards',
