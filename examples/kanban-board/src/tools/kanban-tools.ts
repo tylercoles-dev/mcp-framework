@@ -425,14 +425,44 @@ export class KanbanTools {
   private registerCreateCardTool(server: MCPServer): void {
     server.registerTool('create_card', {
       title: 'Create Card',
-      description: 'Create a new card in a column',
+      description: 'Create a new card in a column. Specify the column by name (e.g., "To Do") or position (0-based index)',
       inputSchema: CreateCardSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const input = CreateCardSchema.parse(args);
+        
+        // Validate that at least one column specifier is provided
+        if (!input.column_name && input.column_position === undefined) {
+          throw new ValidationError('Must specify either column_name or column_position');
+        }
+        
+        // Get columns for the board
+        const columns = await this.db.getColumnsByBoard(input.board_id);
+        if (columns.length === 0) {
+          throw new ValidationError(`Board ${input.board_id} has no columns`);
+        }
+        
+        // Resolve column_id based on name or position
+        let column_id: number;
+        if (input.column_name) {
+          const column = columns.find(c => c.name.toLowerCase() === input.column_name!.toLowerCase());
+          if (!column) {
+            throw new ValidationError(`Column "${input.column_name}" not found in board ${input.board_id}`);
+          }
+          column_id = column.id!;
+        } else if (input.column_position !== undefined) {
+          if (input.column_position >= columns.length) {
+            throw new ValidationError(`Column position ${input.column_position} is out of range (board has ${columns.length} columns)`);
+          }
+          column_id = columns[input.column_position].id!;
+        } else {
+          // This shouldn't happen due to the refine validation, but just in case
+          throw new ValidationError('Must specify either column_name or column_position');
+        }
+        
         const card = await this.db.createCard({
           board_id: input.board_id,
-          column_id: input.column_id,
+          column_id: column_id,
           title: input.title,
           description: input.description || null,
           position: input.position,
@@ -516,12 +546,51 @@ export class KanbanTools {
   private registerMoveCardTool(server: MCPServer): void {
     server.registerTool('move_card', {
       title: 'Move Card',
-      description: 'Move a card to a different column or position',
+      description: 'Move a card to a different column or position. Specify the column by name (e.g., "Done") or position (0-based index)',
       inputSchema: MoveCardSchema,
     }, async (args: any): Promise<ToolResult> => {
       try {
         const input = MoveCardSchema.parse(args);
-        const card = await this.db.moveCard(input.card_id, input.column_id, input.position);
+        
+        // Validate that at least one column specifier is provided
+        if (!input.column_name && input.column_position === undefined) {
+          throw new ValidationError('Must specify either column_name or column_position');
+        }
+        
+        // Get the card to find its board_id
+        const existingCard = await this.db.getCardById(input.card_id);
+        if (!existingCard) {
+          throw new NotFoundError('Card', input.card_id);
+        }
+        
+        // Get columns for the board
+        const columns = await this.db.getColumnsByBoard(existingCard.board_id);
+        if (columns.length === 0) {
+          throw new ValidationError(`Board ${existingCard.board_id} has no columns`);
+        }
+        
+        // Resolve column_id based on name or position
+        let column_id: number;
+        let columnName: string;
+        if (input.column_name) {
+          const column = columns.find(c => c.name.toLowerCase() === input.column_name!.toLowerCase());
+          if (!column) {
+            throw new ValidationError(`Column "${input.column_name}" not found in board ${existingCard.board_id}`);
+          }
+          column_id = column.id!;
+          columnName = column.name;
+        } else if (input.column_position !== undefined) {
+          if (input.column_position >= columns.length) {
+            throw new ValidationError(`Column position ${input.column_position} is out of range (board has ${columns.length} columns)`);
+          }
+          column_id = columns[input.column_position].id!;
+          columnName = columns[input.column_position].name;
+        } else {
+          // This shouldn't happen due to the refine validation, but just in case
+          throw new ValidationError('Must specify either column_name or column_position');
+        }
+        
+        const card = await this.db.moveCard(input.card_id, column_id, input.position);
 
         if (!card) {
           throw new NotFoundError('Card', input.card_id);
@@ -536,7 +605,7 @@ export class KanbanTools {
           content: [
             {
               type: 'text',
-              text: `✅ Successfully moved card "${card.title}" to column ${input.column_id} at position ${input.position}`,
+              text: `✅ Successfully moved card "${card.title}" to column "${columnName}" at position ${input.position}`,
             },
           ],
         };

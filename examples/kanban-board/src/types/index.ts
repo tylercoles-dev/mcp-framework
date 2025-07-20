@@ -32,7 +32,8 @@ export type UpdateColumnInput = z.infer<typeof UpdateColumnSchema>;
 // Card schemas
 export const CreateCardSchema = z.object({
   board_id: z.number().int().positive(),
-  column_id: z.number().int().positive(),
+  column_name: z.string().min(1).max(255).optional(),
+  column_position: z.number().int().min(0).optional(),
   title: z.string().min(1).max(255),
   description: z.string().optional(),
   position: z.number().int().min(0).default(0),
@@ -45,7 +46,8 @@ export const UpdateCardSchema = CreateCardSchema.partial().omit({ board_id: true
 
 export const MoveCardSchema = z.object({
   card_id: z.number().int().positive(),
-  column_id: z.number().int().positive(),
+  column_name: z.string().min(1).max(255).optional(),
+  column_position: z.number().int().min(0).optional(),
   position: z.number().int().min(0),
 });
 
