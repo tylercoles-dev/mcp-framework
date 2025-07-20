@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { MCPServer } from '@tylercoles/mcp-server';
+import { MCPServer, LogLevel } from '@tylercoles/mcp-server';
 import { HttpTransport } from '@tylercoles/mcp-transport-http';
 import { KanbanDatabase, DatabaseConfig } from './database/index';
 import { KanbanTools } from './tools/kanban-tools';
@@ -34,10 +34,24 @@ async function createKanbanServer() {
   await db.initialize();
   console.log('✅ Database initialized');
 
-  // Create MCP server
+  // Create MCP server with logging configuration
   const server = new MCPServer({
     name: 'kanban-board',
     version: '1.0.0',
+    capabilities: {
+      logging: {
+        supportedLevels: ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'],
+        supportsStructuredLogs: true,
+        supportsLoggerNamespaces: true
+      }
+    },
+    logging: {
+      level: LogLevel.Info, // Info level - reduces noise while keeping important messages
+      structured: false, // Disable structured logging to avoid notification failures
+      includeTimestamp: true,
+      includeSource: false,
+      maxMessageLength: 8192
+    }
   });
 
   // Setup WebSocket server first
