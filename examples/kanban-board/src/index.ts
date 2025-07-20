@@ -97,7 +97,8 @@ async function createKanbanServer() {
     description: 'Detailed information about a specific board',
     mimeType: 'application/json',
   }, async (uri: any) => {
-    const match = uri.match(/kanban:\/\/board\/(\d+)/);
+    const uriString = typeof uri === 'string' ? uri : uri.toString();
+    const match = uriString.match(/kanban:\/\/board\/(\d+)/);
     if (!match) {
       throw new Error('Invalid board URI format');
     }
@@ -180,7 +181,8 @@ async function createKanbanServer() {
     description: 'Detailed information about a specific card including comments',
     mimeType: 'application/json',
   }, async (uri: any) => {
-    const match = uri.match(/kanban:\/\/card\/(\d+)/);
+    const uriString = typeof uri === 'string' ? uri : uri.toString();
+    const match = uriString.match(/kanban:\/\/card\/(\d+)/);
     if (!match) {
       throw new Error('Invalid card URI format');
     }
@@ -215,7 +217,8 @@ async function createKanbanServer() {
     description: 'Cards matching a search query',
     mimeType: 'application/json',
   }, async (uri: any) => {
-    const match = uri.match(/kanban:\/\/search\/(.+)/);
+    const uriString = typeof uri === 'string' ? uri : uri.toString();
+    const match = uriString.match(/kanban:\/\/search\/(.+)/);
     if (!match) {
       throw new Error('Invalid search URI format');
     }
