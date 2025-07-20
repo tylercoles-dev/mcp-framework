@@ -178,13 +178,13 @@ class IdeMCPServer {
             {
                 title: "Create Project",
                 description: "Create a new project directory with proper structure and initial files",
-                inputSchema: {
+                inputSchema: z.object({
                     name: z.string().describe("Project name"),
                     type: z.enum(["node", "python", "react", "nextjs", "generic"]).describe("Project type"),
                     directory: z.string().describe("Base directory path"),
                     git: z.boolean().optional().default(true).describe("Initialize git repository"),
                     dependencies: z.array(z.string()).optional().describe("Initial dependencies to install")
-                }
+                })
             },
             async ({ name, type, directory, git, dependencies }) => {
                 return await this.createProject({ name, type, directory, git, dependencies });
@@ -196,13 +196,13 @@ class IdeMCPServer {
             {
                 title: "Setup Workspace",
                 description: "Set up workspace with common configuration files and folder structure",
-                inputSchema: {
+                inputSchema: z.object({
                     projectPath: z.string().describe("Path to the project"),
                     includeVSCode: z.boolean().optional().default(true).describe("Include VS Code settings"),
                     includeGitignore: z.boolean().optional().default(true).describe("Include .gitignore"),
                     includeEditorConfig: z.boolean().optional().default(true).describe("Include .editorconfig"),
                     includePrettier: z.boolean().optional().default(true).describe("Include Prettier config")
-                }
+                })
             },
             async (args) => {
                 return await this.setupWorkspace(args);
@@ -214,13 +214,13 @@ class IdeMCPServer {
             {
                 title: "Manage Dependencies",
                 description: "Add, remove, or update project dependencies with proper validation",
-                inputSchema: {
+                inputSchema: z.object({
                     projectPath: z.string().describe("Path to the project"),
                     type: z.enum(["npm", "pip", "cargo"]).describe("Package manager type"),
                     dependencies: z.array(z.string()).optional().describe("Dependencies to add"),
                     devDependencies: z.array(z.string()).optional().describe("Dev dependencies to add (npm only)"),
                     remove: z.array(z.string()).optional().describe("Dependencies to remove")
-                }
+                })
             },
             async (args) => {
                 return await this.manageDependencies(args);
@@ -236,7 +236,7 @@ class IdeMCPServer {
             {
                 title: "Serena Integration Info",
                 description: "Get information about Serena integration status and available tools",
-                inputSchema: {}
+                inputSchema: z.object({})
             },
             async () => {
                 if (!this.config.enabled) {
@@ -288,7 +288,7 @@ class IdeMCPServer {
             {
                 title: "Health Check",
                 description: "Check server health and status",
-                inputSchema: {}
+                inputSchema: z.object({})
             },
             async () => {
                 const capabilities = this.server.getCapabilities();
@@ -312,12 +312,12 @@ class IdeMCPServer {
             {
                 title: "Git Commit",
                 description: "Stage and commit changes with a message",
-                inputSchema: {
+                inputSchema: z.object({
                     projectPath: z.string().describe("Path to the git repository"),
                     message: z.string().describe("Commit message"),
                     addAll: z.boolean().optional().default(true).describe("Add all changes before committing"),
                     files: z.array(z.string()).optional().describe("Specific files to add (if addAll is false)")
-                }
+                })
             },
             async (args) => {
                 return await this.gitCommit(args);
@@ -329,10 +329,10 @@ class IdeMCPServer {
             {
                 title: "Git Status",
                 description: "Get git repository status and information",
-                inputSchema: {
+                inputSchema: z.object({
                     projectPath: z.string().describe("Path to the git repository"),
                     porcelain: z.boolean().optional().default(false).describe("Use porcelain format for parsing")
-                }
+                })
             },
             async (args) => {
                 return await this.gitStatus(args);
@@ -344,7 +344,7 @@ class IdeMCPServer {
             {
                 title: "Git Clone",
                 description: "Clone a git repository to a specified directory and return the project path",
-                inputSchema: {
+                inputSchema: z.object({
                     url: z.string().describe("Git repository URL (https or ssh)"),
                     directory: z.string().describe("Base directory to clone into"),
                     projectName: z.string().optional().describe("Custom project name (defaults to repo name)"),
@@ -352,7 +352,7 @@ class IdeMCPServer {
                     depth: z.number().optional().describe("Shallow clone depth (for faster cloning)"),
                     recursive: z.boolean().optional().default(false).describe("Clone submodules recursively"),
                     setupWorkspace: z.boolean().optional().default(false).describe("Automatically setup workspace after clone")
-                }
+                })
             },
             async (args) => {
                 return await this.gitClone(args);

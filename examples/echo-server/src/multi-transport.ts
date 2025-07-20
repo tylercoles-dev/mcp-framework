@@ -24,11 +24,11 @@ async function main() {
     {
       title: 'Calculator',
       description: 'Perform basic calculations',
-      inputSchema: {
+      inputSchema: z.object({
         operation: z.enum(['add', 'subtract', 'multiply', 'divide']).describe('Operation to perform'),
         a: z.number().describe('First number'),
         b: z.number().describe('Second number')
-      }
+      })
     },
     async ({ operation, a, b }) => {
       let result: number | undefined;
@@ -53,9 +53,9 @@ async function main() {
     {
       title: 'Get Current Time',
       description: 'Get the current date and time',
-      inputSchema: {
+      inputSchema: z.object({
         timezone: z.string().optional().describe('Timezone (e.g., "UTC", "America/New_York")')
-      }
+      })
     },
     async ({ timezone }) => {
       const date = new Date();
@@ -77,9 +77,9 @@ async function main() {
     {
       title: 'List Available Tools',
       description: 'Get a list of all available tools and their descriptions',
-      inputSchema: {
+      inputSchema: z.object({
         detailed: z.boolean().optional().describe('Include input schemas')
-      }
+      })
     },
     async ({ detailed }) => {
       const tools = server.getTools();

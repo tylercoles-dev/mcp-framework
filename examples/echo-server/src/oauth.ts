@@ -23,9 +23,9 @@ async function main() {
     {
       title: 'Authenticated Echo',
       description: 'Echoes back the message with user info',
-      inputSchema: {
+      inputSchema: z.object({
         message: z.string().describe('Message to echo back')
-      }
+      })
     },
     async ({ message }, context) => {
       const user = context.user;
@@ -55,7 +55,7 @@ async function main() {
     {
       title: 'Who Am I',
       description: 'Get information about the authenticated user',
-      inputSchema: {}
+      inputSchema: z.object({})
     },
     async (_args, context) => {
       const user = context.user;

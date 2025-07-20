@@ -23,7 +23,7 @@ const server = new MCPServer({
 server.registerTool("echo", {
   title: "Echo Tool",
   description: "Echoes back the input message",
-  inputSchema: { message: z.string() }
+  inputSchema: z.object({ message: z.string() })
 }, async ({ message }) => ({
   content: [{ type: "text", text: `Echo: ${message}` }]
 }));
@@ -31,11 +31,11 @@ server.registerTool("echo", {
 server.registerTool("calculate", {
   title: "Calculator",
   description: "Performs basic arithmetic operations",
-  inputSchema: {
+  inputSchema: z.object({
     operation: z.enum(["add", "subtract", "multiply", "divide"]),
     a: z.number(),
     b: z.number()
-  }
+  })
 }, async ({ operation, a, b }) => {
   let result: number | undefined;
   switch (operation) {

@@ -1456,7 +1456,8 @@ export class MCPServer {
       promptConfig.description = config.description;
     }
     if (config.argsSchema) {
-      promptConfig.argsSchema = config.argsSchema;
+      // Convert JSON schema to Zod schema shape for SDK compatibility
+      promptConfig.argsSchema = this.jsonSchemaToZodShape(config.argsSchema);
     }
 
     // Wrap handler with error handling and tracing
@@ -1493,6 +1494,64 @@ export class MCPServer {
         console.error('Failed to send prompt list changed notification:', err);
       });
     }
+  }
+
+  /**
+   * Convert JSON schema to Zod schema shape for MCP SDK compatibility
+   */
+  private jsonSchemaToZodShape(jsonSchema: any): any {
+    if (!jsonSchema || typeof jsonSchema !== 'object') {
+      return {};
+    }
+
+    if (jsonSchema.type === 'object' && jsonSchema.properties) {
+      const shape: any = {};
+      const required = jsonSchema.required || [];
+      
+      for (const [key, prop] of Object.entries(jsonSchema.properties)) {
+        const propSchema = prop as any;
+        let zodType: any;
+        
+        switch (propSchema.type) {
+          case 'string':
+            zodType = z.string();
+            break;
+          case 'number':
+            zodType = z.number();
+            break;
+          case 'integer':
+            zodType = z.number().int();
+            break;
+          case 'boolean':
+            zodType = z.boolean();
+            break;
+          case 'array':
+            zodType = z.array(z.any());
+            break;
+          case 'object':
+            zodType = z.object(this.jsonSchemaToZodShape(propSchema));
+            break;
+          default:
+            zodType = z.any();
+        }
+        
+        // Add description if present
+        if (propSchema.description) {
+          zodType = zodType.describe(propSchema.description);
+        }
+        
+        // Make optional if not in required array
+        if (!required.includes(key)) {
+          zodType = zodType.optional();
+        }
+        
+        shape[key] = zodType;
+      }
+      
+      return shape;
+    }
+    
+    return {};
   }
 
   /**

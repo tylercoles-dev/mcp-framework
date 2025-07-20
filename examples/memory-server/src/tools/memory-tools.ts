@@ -12,13 +12,13 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "Store Memory",
       description: "Store a new memory with content, project, topic, type, and tags",
-      inputSchema: {
+      inputSchema: z.object({
         content: z.string().describe("The content/text of the memory to store"),
         projectName: z.string().optional().describe("Project name for organizing memories (default: 'default')"),
         memoryTopic: z.string().optional().describe("Topic/category within the project (default: 'general')"),
         memoryType: z.string().optional().describe("Type of memory like 'note', 'fact', 'idea', etc. (default: 'note')"),
         tags: z.array(z.string()).optional().describe("Optional tags for categorization")
-      }
+      })
     },
     async (args, context) => {
       const user = context.user;
@@ -56,14 +56,14 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "Retrieve Memories",
       description: "Search and retrieve memories using semantic search",
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().describe("Search query to find relevant memories"),
         projectName: z.string().optional().describe("Filter by project name"),
         memoryTopic: z.string().optional().describe("Filter by memory topic"),
         memoryType: z.string().optional().describe("Filter by memory type"),
         limit: z.number().optional().describe("Maximum number of results (default: 10)"),
         tags: z.array(z.string()).optional().describe("Filter by tags")
-      }
+      })
     },
     async (args, context) => {
       const user = context.user;
@@ -117,13 +117,13 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "Search by Tag",
       description: "Find memories by specific tags",
-      inputSchema: {
+      inputSchema: z.object({
         tag: z.string().describe("Tag to search for"),
         projectName: z.string().optional().describe("Filter by project name"),
         memoryTopic: z.string().optional().describe("Filter by memory topic"),
         memoryType: z.string().optional().describe("Filter by memory type"),
         limit: z.number().optional().describe("Maximum number of results (default: 10)")
-      }
+      })
     },
     async (args, context) => {
       const user = context.user;
@@ -175,11 +175,11 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "Recall Memories",
       description: "Recall memories from a specific time period",
-      inputSchema: {
+      inputSchema: z.object({
         timeExpression: z.string().describe("Natural time expression like 'last week', 'yesterday', '2 days ago'"),
         query: z.string().optional().describe("Optional additional search query"),
         limit: z.number().optional().describe("Maximum number of results (default: 10)")
-      }
+      })
     },
     async (args, context) => {
       const user = context.user;
@@ -231,9 +231,9 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "Delete Memory",
       description: "Delete a specific memory by ID",
-      inputSchema: {
+      inputSchema: z.object({
         memoryId: z.string().describe("ID of the memory to delete")
-      }
+      })
     },
     async (args, context) => {
       const user = context.user;
@@ -267,7 +267,7 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "Get Memory Statistics",
       description: "Get statistics about your stored memories",
-      inputSchema: {}
+      inputSchema: z.object({})
     },
     async (_args, context) => {
       const user = context.user;
@@ -310,7 +310,7 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "List Projects",
       description: "List all your memory projects",
-      inputSchema: {}
+      inputSchema: z.object({})
     },
     async (_args, context) => {
       const user = context.user;
@@ -350,9 +350,9 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "List Topics",
       description: "List all topics within a specific project",
-      inputSchema: {
+      inputSchema: z.object({
         projectName: z.string().describe("Project name to get topics for")
-      }
+      })
     },
     async (args, context) => {
       const user = context.user;
@@ -395,10 +395,10 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "List Memory Types",
       description: "List all memory types within a specific project and topic",
-      inputSchema: {
+      inputSchema: z.object({
         projectName: z.string().describe("Project name"),
         memoryTopic: z.string().describe("Memory topic within the project")
-      }
+      })
     },
     async (args, context) => {
       const user = context.user;
@@ -442,7 +442,7 @@ export function setupMemoryTools(server: MCPServer, memoryService: MemoryService
     {
       title: "List Available Tools",
       description: "Get a list of all available memory management tools",
-      inputSchema: {}
+      inputSchema: z.object({})
     },
     async (_args, _context) => {
       const tools = server.getTools();

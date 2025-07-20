@@ -20,9 +20,9 @@ async function main() {
     {
       title: 'Echo Tool',
       description: 'Echoes back the provided message with user info',
-      inputSchema: {
+      inputSchema: z.object({
         message: z.string().describe('Message to echo back')
-      }
+      })
     },
     async ({ message }, context) => {
       // Access user info from context
@@ -44,10 +44,10 @@ async function main() {
     {
       title: 'Echo with Validation',
       description: 'Echo message with length validation',
-      inputSchema: {
+      inputSchema: z.object({
         message: z.string().describe('Message to echo (max 100 chars)'),
         uppercase: z.boolean().optional().describe('Convert to uppercase')
-      }
+      })
     },
     async ({ message, uppercase }, context) => {
       if (message.length > 100) {

@@ -20,9 +20,9 @@ async function createEchoServer() {
     {
       title: 'Echo Tool',
       description: 'Echoes back the provided message',
-      inputSchema: {
+      inputSchema: z.object({
         message: z.string().describe('Message to echo back')
-      }
+      })
     },
     async ({ message }, context) => {
       const user = context.user;
@@ -42,9 +42,9 @@ async function createEchoServer() {
     {
       title: 'Echo Statistics',
       description: 'Get statistics about a message',
-      inputSchema: {
+      inputSchema: z.object({
         message: z.string().describe('Message to analyze')
-      }
+      })
     },
     async ({ message }: { message: string }) => {
       const stats = {

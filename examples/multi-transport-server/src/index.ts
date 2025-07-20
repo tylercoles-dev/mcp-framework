@@ -28,10 +28,10 @@ async function createMultiTransportServer() {
     {
       title: 'Get Current Time',
       description: 'Get the current time in various formats',
-      inputSchema: {
+      inputSchema: z.object({
         format: z.enum(['iso', 'unix', 'human']).optional()
           .describe('Time format (default: iso)')
-      }
+      })
     },
     async ({ format = 'iso' }, context) => {
       const now = new Date();
@@ -66,7 +66,7 @@ async function createMultiTransportServer() {
     {
       title: 'List Server Capabilities',
       description: 'Get information about available tools, resources, and prompts',
-      inputSchema: {}
+      inputSchema: z.object({})
     },
     async (_, context) => {
       const capabilities = server.getCapabilities();

@@ -21,9 +21,9 @@ async function main() {
     {
       title: 'Greet User',
       description: 'Greet the authenticated user',
-      inputSchema: {
+      inputSchema: z.object({
         greeting: z.string().optional().describe('Custom greeting')
-      }
+      })
     },
     async ({ greeting }, context) => {
       const user = context.user;

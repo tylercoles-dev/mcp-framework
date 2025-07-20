@@ -199,10 +199,10 @@ async function createJiraServer() {
         {
             title: "Search Jira Issues",
             description: "Search for Jira issues using JQL (Jira Query Language)",
-            inputSchema: {
+            inputSchema: z.object({
                 jql: z.string().describe("JQL query to search for issues"),
                 maxResults: z.number().optional().default(50).describe("Maximum number of results to return"),
-            },
+            }),
         },
         async ({ jql, maxResults = 50 }) => {
             try {
@@ -236,12 +236,12 @@ async function createJiraServer() {
         {
             title: "Get Assigned Issues",
             description: "Get issues assigned to a specific user or current user",
-            inputSchema: {
+            inputSchema: z.object({
                 assignee: z.string().optional().describe('Username, email, or "currentUser()" for current user. Leave empty for current user.'),
                 status: z.string().optional().describe('Filter by status (e.g., "To Do", "In Progress", "Done")'),
                 project: z.string().optional().describe("Filter by project key"),
                 maxResults: z.number().optional().default(50).describe("Maximum number of results to return"),
-            },
+            }),
         },
         async ({ assignee, status, project, maxResults = 50 }) => {
             try {
@@ -323,9 +323,9 @@ async function createJiraServer() {
         {
             title: "Get Issue Details",
             description: "Get detailed information about a specific Jira issue",
-            inputSchema: {
+            inputSchema: z.object({
                 issueKey: z.string().describe("The issue key (e.g., PROJ-123)"),
-            },
+            }),
         },
         async ({ issueKey }) => {
             try {
@@ -397,14 +397,14 @@ async function createJiraServer() {
         {
             title: "Create Jira Issue",
             description: "Create a new issue in a Jira project",
-            inputSchema: {
+            inputSchema: z.object({
                 projectKey: z.string().describe("The project key"),
                 summary: z.string().describe("Issue summary"),
                 description: z.string().optional().describe("Issue description"),
                 issueType: z.string().describe("Issue type (e.g., Story, Bug, Task)"),
                 priority: z.string().optional().default("Medium").describe("Priority level"),
                 customFields: z.record(z.any()).optional().describe("Custom field values as key-value pairs (fieldId or fieldName: value)"),
-            },
+            }),
         },
         async ({ projectKey, summary, description, issueType, priority = "Medium", customFields }) => {
             try {
@@ -508,13 +508,13 @@ async function createJiraServer() {
         {
             title: "Update Jira Issue",
             description: "Update an existing Jira issue",
-            inputSchema: {
+            inputSchema: z.object({
                 issueKey: z.string().describe("The issue key to update"),
                 summary: z.string().optional().describe("New summary"),
                 description: z.string().optional().describe("New description"),
                 status: z.string().optional().describe("New status"),
                 customFields: z.record(z.any()).optional().describe("Custom field values to update as key-value pairs (fieldId or fieldName: value)"),
-            },
+            }),
         },
         async ({ issueKey, summary, description, status, customFields }) => {
             try {
@@ -629,10 +629,10 @@ async function createJiraServer() {
         {
             title: "Add Comment",
             description: "Add a comment to a Jira issue",
-            inputSchema: {
+            inputSchema: z.object({
                 issueKey: z.string().describe("The issue key"),
                 comment: z.string().describe("Comment text"),
-            },
+            }),
         },
         async ({ issueKey, comment }) => {
             try {
@@ -684,7 +684,7 @@ async function createJiraServer() {
         {
             title: "Get Projects",
             description: "List all available Jira projects",
-            inputSchema: {},
+            inputSchema: z.object({}),
         },
         async () => {
             try {
@@ -720,9 +720,9 @@ async function createJiraServer() {
         {
             title: "Get Issue Types",
             description: "Get available issue types for a project",
-            inputSchema: {
+            inputSchema: z.object({
                 projectKey: z.string().describe("The project key"),
-            },
+            }),
         },
         async ({ projectKey }) => {
             try {
@@ -758,10 +758,10 @@ async function createJiraServer() {
         {
             title: "Get Custom Fields",
             description: "Get custom fields available in Jira with their IDs and types",
-            inputSchema: {
+            inputSchema: z.object({
                 projectKey: z.string().optional().describe("Filter by project key to see project-specific fields"),
                 search: z.string().optional().describe("Search term to filter field names"),
-            },
+            }),
         },
         async ({ projectKey, search }) => {
             try {
@@ -829,10 +829,10 @@ async function createJiraServer() {
         {
             title: "Get Issue Custom Fields",
             description: "Get custom field values for a specific issue",
-            inputSchema: {
+            inputSchema: z.object({
                 issueKey: z.string().describe("The issue key (e.g., PROJ-123)"),
                 fieldNames: z.array(z.string()).optional().describe("Specific custom field names to retrieve (if not provided, gets all)"),
-            },
+            }),
         },
         async ({ issueKey, fieldNames }) => {
             try {
@@ -934,12 +934,12 @@ async function createJiraServer() {
         {
             title: "Set Issue Custom Field",
             description: "Set a custom field value for an issue",
-            inputSchema: {
+            inputSchema: z.object({
                 issueKey: z.string().describe("The issue key (e.g., PROJ-123)"),
                 fieldId: z.string().describe("Custom field ID (e.g., customfield_10001) or field name"),
                 value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]).describe("The value to set (format depends on field type)"),
                 valueType: z.enum(["text", "number", "select", "multiselect", "user", "date", "datetime"]).optional().describe("Type hint for value formatting"),
-            },
+            }),
         },
         async ({ issueKey, fieldId, value, valueType }) => {
             try {

@@ -18,9 +18,9 @@ async function main() {
     {
       title: 'Echo Tool',
       description: 'Echoes back the provided message',
-      inputSchema: {
+      inputSchema: z.object({
         message: z.string().describe('Message to echo back')
-      }
+      })
     },
     async ({ message }) => ({
       content: [{
@@ -36,9 +36,9 @@ async function main() {
     {
       title: 'Reverse Echo Tool',
       description: 'Echoes back the message in reverse',
-      inputSchema: {
+      inputSchema: z.object({
         message: z.string().describe('Message to reverse and echo')
-      }
+      })
     },
     async ({ message }) => ({
       content: [{
