@@ -35,7 +35,7 @@
     "url": "https://github.com/tylercoles-dev/mcp-framework/issues"
   },
   "dependencies": {
-    "@tylercoles/mcp-auth": "^0.2.1",
+    "@tylercoles/mcp-auth": "^0.2.2",
     "axios": "^1.7.9",
     "express": "^4.21.2",
     "express-session": "^1.17.0",

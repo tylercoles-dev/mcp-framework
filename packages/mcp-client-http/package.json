@@ -39,7 +39,7 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.16.0",
-        "@tylercoles/mcp-client": "^0.2.1"
+        "@tylercoles/mcp-client": "^0.2.2"
     },
     "devDependencies": {
         "@types/node": "^20.0.0",

@@ -1,12 +1,13 @@
 {
   "name": "@tylercoles/mcp-framework",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A modular framework for building Model Context Protocol (MCP) servers",
   "private": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tylercoles-dev/mcp-framework.git"
   },
+  "type": "module",
   "keywords": [
     "mcp",
     "model-context-protocol",

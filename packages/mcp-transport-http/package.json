@@ -36,9 +36,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.16.0",
-    "@tylercoles/mcp-auth": "^0.2.1",
-    "@tylercoles/mcp-server": "^0.2.1",
-    "@tylercoles/mcp-rate-limit": "^0.2.1",
+    "@tylercoles/mcp-auth": "^0.2.2",
+    "@tylercoles/mcp-server": "^0.2.2",
+    "@tylercoles/mcp-rate-limit": "^0.2.2",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "helmet": "^8.0.0"

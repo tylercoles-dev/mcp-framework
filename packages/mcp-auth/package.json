@@ -4,6 +4,13 @@
   "description": "Authentication abstractions and providers for MCP servers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "module": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
