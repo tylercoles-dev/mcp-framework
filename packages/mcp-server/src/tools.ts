@@ -11,12 +11,12 @@ export type SdkToolConfig<InputArgs extends ZodRawShape> = {
 export interface SdkToolResult extends CallToolResult {
 }
 
-export const createSuccessObjectResult = <T>(value: T): SdkToolResult => {
+export const createSuccessObjectResult = <T>(value: T, message?: string): SdkToolResult => {
     return {
         content: [
             {
                 type: 'text',
-                text: JSON.stringify(value),
+                text: message ?? JSON.stringify(value),
             },
         ],
         structuredContent: value as any,

@@ -5,6 +5,9 @@ import { z, ZodRawShape, ZodTypeAny } from "zod";
 import { MCPErrorFactory, MCPErrorClass, MCPError, MCPErrorCode } from "./errors.js";
 import { SdkToolConfig, SdkToolResult } from "./tools.js";
 
+export * from './types.js';
+export * from './tools.js';
+
 /**
  * MCP Notification interfaces
  */
@@ -60,6 +63,11 @@ export interface PromptListChangedNotification {
 export interface InputArgs extends ZodRawShape { }
 export interface OutputArgs extends ZodRawShape { }
 
+export type ToolModule<ToolInputs extends InputArgs = InputArgs> = {
+  name: string;
+  config: ToolConfig<ToolInputs>;
+  handler: ToolHandler<ToolInputs>;
+};
 
 /**
  * RFC 5424 Log Severity Levels
@@ -1287,35 +1295,82 @@ export class MCPServer {
     return this.sessionManager.getSessionStats();
   }
 
-  /**
-   * Register a tool with the server
-   */
+  registerTool<ToolInputs extends InputArgs>(
+    toolModule: ToolModule<ToolInputs>
+  ): void;
+
   registerTool<ToolInputs extends InputArgs>(
     name: string,
     config: ToolConfig<ToolInputs>,
     handler: ToolHandler<ToolInputs>
+  ): void;
+
+  registerTool<ToolInputs extends InputArgs>(
+    nameOrModule: string | ToolModule<ToolInputs>,
+    maybeConfig?: ToolConfig<ToolInputs>,
+    maybeHandler?: ToolHandler<ToolInputs>
   ): void {
-    // Validate tool name
+    // First check if nameOrModule is a valid string for the legacy API
+    if (typeof nameOrModule === 'string') {
+      // Legacy API: registerTool(name, config, handler)
+      if (!nameOrModule || nameOrModule.length === 0) {
+        throw MCPErrorFactory.invalidParams('Tool name must be a non-empty string');
+      }
+      
+      const name = nameOrModule;
+      const config = maybeConfig!;
+      const handler = maybeHandler!;
+
+      this.registerToolInternal(name, config, handler);
+      return;
+    }
+
+    // Check for invalid non-string, non-object types (null, undefined, number, etc.)
+    if (!nameOrModule || typeof nameOrModule !== 'object' || Array.isArray(nameOrModule)) {
+      throw MCPErrorFactory.invalidParams('Tool name must be a non-empty string');
+    }
+
+    // Module API: registerTool(toolModule)
+    if (maybeConfig || maybeHandler) {
+      throw MCPErrorFactory.invalidParams(
+        'When passing a tool module object, do not pass additional arguments.'
+      );
+    }
+
+    const name = nameOrModule.name;
+    const config = nameOrModule.config;
+    const handler = nameOrModule.handler;
+
+    // Validate tool name from module
     if (!name || typeof name !== 'string') {
       throw MCPErrorFactory.invalidParams('Tool name must be a non-empty string');
     }
 
-    // Check if tool already exists
+    this.registerToolInternal(name, config, handler);
+  }
+
+  private registerToolInternal<ToolInputs extends InputArgs>(
+    name: string,
+    config: ToolConfig<ToolInputs>,
+    handler: ToolHandler<ToolInputs>
+  ): void {
+
+    // Check for duplicates
     if (this.tools.has(name)) {
       throw MCPErrorFactory.invalidParams(`Tool '${name}' is already registered`);
     }
 
-    // Validate that inputSchema is a Zod schema object
+    // Validate schema shape
     if (!config.inputSchema || typeof config.inputSchema !== 'object') {
       throw MCPErrorFactory.invalidParams('Tool inputSchema must be a Zod schema object');
     }
 
-    // Check if it's a Zod schema by looking for Zod-specific properties
     if (!('_def' in config.inputSchema) || !('shape' in config.inputSchema)) {
-      throw MCPErrorFactory.invalidParams('Tool inputSchema must be a Zod schema object, not a plain JSON schema. Use z.object({ ... }) instead.');
+      throw MCPErrorFactory.invalidParams(
+        'Tool inputSchema must be a Zod schema object, not a plain JSON schema. Use z.object({ ... }) instead.'
+      );
     }
 
-    // Track tool info
     this.tools.set(name, {
       name,
       title: config.title,
@@ -1323,8 +1378,6 @@ export class MCPServer {
       inputSchema: config.inputSchema,
     });
 
-    // Create the tool config object for SDK
-    // The SDK expects a ZodRawShape (the shape object), not a complete Zod schema
     const toolConfig: SdkToolConfig<ToolInputs> = {
       description: config.description,
       inputSchema: config.inputSchema.shape,
@@ -1338,27 +1391,21 @@ export class MCPServer {
       name,
       toolConfig as any,
       async (args: any, extra: any) => {
-        // Start request tracing
         const tracedContext = this.requestTracer.startTrace(`tool_call:${name}`, this.getContext());
 
         try {
           const result = await handler(args, tracedContext);
 
-          // End tracing successfully
           this.requestTracer.endTrace(tracedContext, true, undefined, JSON.stringify(result).length);
-
           return result;
         } catch (error) {
-          // End tracing with error
           const mcpError = MCPErrorFactory.fromError(error);
           this.requestTracer.endTrace(tracedContext, false, mcpError.code?.toString());
-
           throw mcpError;
         }
       }
     );
 
-    // Notify that tool list has changed
     if (this.started) {
       this.sendToolListChangedNotification().catch(err => {
         console.error('Failed to send tool list changed notification:', err);

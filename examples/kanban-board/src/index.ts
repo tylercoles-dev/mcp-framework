@@ -3,7 +3,7 @@
 import { MCPServer, LogLevel } from '@tylercoles/mcp-server';
 import { HttpTransport } from '@tylercoles/mcp-transport-http';
 import { KanbanDatabase, DatabaseConfig } from './database/index';
-import { KanbanTools } from './tools/kanban-tools';
+import { registerTools } from './tools';
 import { KanbanWebSocketServer } from './websocket-server';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -58,8 +58,7 @@ async function createKanbanServer() {
   const wsServer = new KanbanWebSocketServer(config.wsPort, db);
 
   // Setup tools with WebSocket server reference
-  const kanbanTools = new KanbanTools(db, wsServer);
-  kanbanTools.registerTools(server);
+  registerTools(server, db, wsServer);
 
   // Add resources for board data access
   server.registerResource('all-boards', 'kanban://boards', {
@@ -87,7 +86,7 @@ async function createKanbanServer() {
     if (!match) {
       throw new Error('Invalid board URI format');
     }
-    
+
     const boardId = parseInt(match[1]);
     const board = await db.getBoardById(boardId);
     if (!board) {
@@ -171,7 +170,7 @@ async function createKanbanServer() {
     if (!match) {
       throw new Error('Invalid card URI format');
     }
-    
+
     const cardId = parseInt(match[1]);
     const card = await db.getCardById(cardId);
     if (!card) {
@@ -180,7 +179,7 @@ async function createKanbanServer() {
 
     const comments = await db.getCardComments(cardId);
     const tags = await db.getCardTags(cardId);
-    
+
     const cardData = {
       card,
       comments,
@@ -207,10 +206,10 @@ async function createKanbanServer() {
     if (!match) {
       throw new Error('Invalid search URI format');
     }
-    
+
     const query = decodeURIComponent(match[1]);
     const cards = await db.searchCards(query);
-    
+
     // Enhance cards with tags for each result
     const cardsWithTags = await Promise.all(
       cards.map(async (card) => {
@@ -242,14 +241,14 @@ async function createKanbanServer() {
     mimeType: 'application/json',
   }, async () => {
     const recentCards = await db.getRecentlyUpdatedCards(50);
-    
+
     // Enhance with board and column information
     const cardsWithContext = await Promise.all(
       recentCards.map(async (card) => {
         const tags = await db.getCardTags(card.id!);
         const board = await db.getBoardById(card.board_id!);
         const column = await db.getColumn(card.column_id!);
-        
+
         return {
           ...card,
           tags,
@@ -413,11 +412,11 @@ async function main() {
     console.log(`📊 Database: ${config.database.type}`);
     console.log(`🌐 HTTP Server: http://${config.host}:${config.port}`);
     console.log(`🔌 WebSocket Server: ws://${config.host}:${config.wsPort}`);
-    
+
     const { server, db, wsServer } = await createKanbanServer();
-    
+
     await server.start();
-    
+
     console.log('✅ Kanban Board MCP Server is running!');
     console.log('\n📚 Available endpoints:');
     console.log(`   • MCP HTTP: http://${config.host}:${config.port}/mcp`);
@@ -438,12 +437,12 @@ async function main() {
     console.log('   • kanban://boards - List all boards');
     console.log('   • kanban://board/{id} - Detailed board data');
     console.log('   • kanban://stats - System statistics');
-    
+
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 }
-console.log(import.meta.url )
+console.log(import.meta.url)
 
 main();

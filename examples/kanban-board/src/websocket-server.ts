@@ -1,7 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { KanbanDatabase } from './database';
-import { KanbanTools } from './tools/kanban-tools';
 
 interface WebSocketMessage {
   type: string;
@@ -25,11 +24,9 @@ export class KanbanWebSocketServer {
   private wss: WebSocketServer;
   private clients: Map<string, ConnectedClient> = new Map();
   private db: KanbanDatabase;
-  private tools: KanbanTools;
 
   constructor(port: number, db: KanbanDatabase) {
     this.db = db;
-    this.tools = new KanbanTools(db);
     this.wss = new WebSocketServer({ port });
     
     this.wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {

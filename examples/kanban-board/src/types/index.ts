@@ -113,8 +113,6 @@ export const SearchCardsSchema = z.object({
   assigned_to: z.string().max(255).optional(),
 });
 
-export const EmptySchema = z.object({});
-
 // API response types
 export interface KanbanBoardData {
   board: {
