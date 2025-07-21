@@ -39,7 +39,7 @@ describe('MCPServer', () => {
           'test_tool',
           {
             description: 'Test tool',
-            inputSchema: { message: z.string() }
+            inputSchema: z.object({ message: z.string() })
           },
           handler
         );

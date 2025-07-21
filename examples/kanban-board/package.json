@@ -1,6 +1,6 @@
 {
   "name": "kanban-board-mcp-example",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A kanban board MCP server example with React frontend and SQL database",
   "type": "module",
   "main": "dist/index.js",
@@ -31,8 +31,8 @@
   "author": "MCP Framework Example",
   "license": "MIT",
   "dependencies": {
-    "@tylercoles/mcp-server": "0.2.1",
-    "@tylercoles/mcp-transport-http": "0.2.1",
+    "@tylercoles/mcp-server": "0.2.2",
+    "@tylercoles/mcp-transport-http": "0.2.2",
     "kysely": "^0.27.3",
     "better-sqlite3": "^9.2.2",
     "pg": "^8.11.3",

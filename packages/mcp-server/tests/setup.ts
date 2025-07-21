@@ -17,7 +17,11 @@ const mockSDKServer = {
 };
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
-  McpServer: vi.fn().mockImplementation(() => mockSDKServer)
+  McpServer: vi.fn().mockImplementation(() => mockSDKServer),
+  ResourceTemplate: vi.fn().mockImplementation((uriTemplate, config) => ({
+    uriTemplate,
+    config
+  }))
 }));
 
 // Suppress console errors during tests

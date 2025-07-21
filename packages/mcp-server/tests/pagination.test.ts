@@ -6,7 +6,8 @@ import {
   type PaginatedToolsResult,
   type PaginatedResourcesResult,
   type PaginatedPromptsResult,
-  type PaginatedResourceTemplatesResult
+  type PaginatedResourceTemplatesResult,
+  z
 } from '../src/index.js';
 
 // Mock the SDK server
@@ -17,6 +18,10 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
     registerPrompt: vi.fn(),
     notification: vi.fn(),
     setRequestHandler: vi.fn()
+  })),
+  ResourceTemplate: vi.fn().mockImplementation((uriTemplate, config) => ({
+    uriTemplate,
+    config
   }))
 }));
 
@@ -84,10 +89,7 @@ describe('MCP Pagination System', () => {
           `tool-${i.toString().padStart(2, '0')}`,
           {
             description: `Test tool ${i}`,
-            inputSchema: {
-              type: 'object',
-              properties: {}
-            }
+            inputSchema: z.object({})
           },
           async () => ({ content: [{ type: 'text', text: `Result from tool ${i}` }] })
         );
@@ -182,12 +184,12 @@ describe('MCP Pagination System', () => {
       for (let i = 1; i <= 15; i++) {
         server.registerResource(
           `resource-${i.toString().padStart(2, '0')}`,
+          `file:///resource-${i}`,
           {
-            uri: `file:///resource-${i}`,
             description: `Test resource ${i}`,
             mimeType: 'text/plain'
           },
-          async () => ({ contents: [{ type: 'text', text: `Content ${i}` }] })
+          async () => ({ contents: [{ uri: `file:///resource-${i}`, type: 'text', text: `Content ${i}` }] })
         );
       }
     });
@@ -228,15 +230,11 @@ describe('MCP Pagination System', () => {
           `prompt-${i.toString().padStart(2, '0')}`,
           {
             description: `Test prompt ${i}`,
-            arguments: [
-              {
-                name: 'input',
-                description: 'Input text',
-                required: true
-              }
-            ]
+            argsSchema: z.object({
+              name: z.string().describe('Input text')
+            })
           },
-          async () => ({ messages: [{ role: 'user', content: { type: 'text', text: `Prompt ${i}` } }] })
+          async () => { messages: [{ role: 'user', content: { type: 'text', text: `Prompt ${i}` } }] }
         );
       }
     });
@@ -262,7 +260,7 @@ describe('MCP Pagination System', () => {
             description: `Template ${i}`,
             mimeType: 'application/json'
           },
-          async () => ({ contents: [{ type: 'text', text: `Template content ${i}` }] })
+          async () => ({ contents: [{ uri: `file:///template-${i}/{id}`, type: 'text', text: `Template content ${i}` }] })
         );
       }
     });
@@ -319,7 +317,7 @@ describe('MCP Pagination System', () => {
         'test-tool-1',
         {
           description: 'Test tool 1',
-          inputSchema: { type: 'object', properties: {} }
+          inputSchema: z.object({})
         },
         async () => ({ content: [{ type: 'text', text: 'test1' }] })
       );
@@ -328,7 +326,7 @@ describe('MCP Pagination System', () => {
         'test-tool-2',
         {
           description: 'Test tool 2',
-          inputSchema: { type: 'object', properties: {} }
+          inputSchema: z.object({})
         },
         async () => ({ content: [{ type: 'text', text: 'test2' }] })
       );
@@ -354,12 +352,12 @@ describe('MCP Pagination System', () => {
       // Register tools
       server.registerTool('tool-a', {
         description: 'Tool A',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: z.object({})
       }, async () => ({ content: [{ type: 'text', text: 'A' }] }));
 
       server.registerTool('tool-b', {
         description: 'Tool B', 
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: z.object({})
       }, async () => ({ content: [{ type: 'text', text: 'B' }] }));
 
       const result1 = server.getToolsPaginated({ limit: 1 });
@@ -374,7 +372,7 @@ describe('MCP Pagination System', () => {
     it('should reject tampered cursors', () => {
       server.registerTool('tool-test', {
         description: 'Test tool',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: z.object({})
       }, async () => ({ content: [{ type: 'text', text: 'test' }] }));
 
       const result = server.getToolsPaginated({ limit: 1 });
@@ -394,7 +392,7 @@ describe('MCP Pagination System', () => {
     it('should handle single item pagination', () => {
       server.registerTool('single-tool', {
         description: 'Single tool',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: z.object({})
       }, async () => ({ content: [{ type: 'text', text: 'single' }] }));
 
       const result = server.getToolsPaginated({ limit: 10 });
@@ -408,7 +406,7 @@ describe('MCP Pagination System', () => {
       for (let i = 1; i <= 10; i++) {
         server.registerTool(`exact-tool-${i}`, {
           description: `Exact tool ${i}`,
-          inputSchema: { type: 'object', properties: {} }
+          inputSchema: z.object({})
         }, async () => ({ content: [{ type: 'text', text: `exact ${i}` }] }));
       }
 
@@ -422,12 +420,12 @@ describe('MCP Pagination System', () => {
       // Register tools with similar names
       server.registerTool('tool-001', {
         description: 'Tool 001',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: z.object({})
       }, async () => ({ content: [{ type: 'text', text: '001' }] }));
 
       server.registerTool('tool-002', {
         description: 'Tool 002',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: z.object({})
       }, async () => ({ content: [{ type: 'text', text: '002' }] }));
 
       const result1 = server.getToolsPaginated({ limit: 2 });

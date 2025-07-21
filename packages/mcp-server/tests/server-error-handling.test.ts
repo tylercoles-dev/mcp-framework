@@ -35,7 +35,7 @@ describe('MCPServer Error Handling', () => {
       expect(() => {
         server.registerTool('', {
           description: 'Test tool',
-          inputSchema: { name: z.string() }
+          inputSchema: z.object({ name: z.string() })
         }, toolHandler);
       }).toThrow(MCPErrorFactory.invalidParams('Tool name must be a non-empty string'));
     });
@@ -46,7 +46,7 @@ describe('MCPServer Error Handling', () => {
       expect(() => {
         server.registerTool(null as any, {
           description: 'Test tool',
-          inputSchema: { name: z.string() }
+          inputSchema: z.object({ name: z.string() })
         }, toolHandler);
       }).toThrow(MCPErrorFactory.invalidParams('Tool name must be a non-empty string'));
     });
@@ -55,7 +55,7 @@ describe('MCPServer Error Handling', () => {
       const toolHandler = vi.fn();
       const toolConfig = {
         description: 'Test tool',
-        inputSchema: { name: z.string() }
+        inputSchema: z.object({ name: z.string() })
       };
       
       server.registerTool('test-tool', toolConfig, toolHandler);
@@ -70,7 +70,7 @@ describe('MCPServer Error Handling', () => {
       
       server.registerTool('test-tool', {
         description: 'Test tool',
-        inputSchema: { name: z.string() }
+        inputSchema: z.object({ name: z.string() })
       }, toolHandler);
 
       // Get the wrapped handler that was registered with the SDK
@@ -93,7 +93,7 @@ describe('MCPServer Error Handling', () => {
       
       server.registerTool('test-tool', {
         description: 'Test tool',
-        inputSchema: { name: z.string() }
+        inputSchema: z.object({ name: z.string() })
       }, toolHandler);
 
       const registeredHandler = mockSDKServer.registerTool.mock.calls[0][2];
@@ -262,7 +262,7 @@ describe('MCPServer Error Handling', () => {
 
       server.registerTool('test-tool', {
         description: 'Test tool',
-        inputSchema: { name: z.string() }
+        inputSchema: z.object({ name: z.string() })
       }, toolHandler);
 
       server.registerResource('test-resource', 'file:///test.txt', {
@@ -277,7 +277,7 @@ describe('MCPServer Error Handling', () => {
       const tool = server.getTool('test-tool');
       expect(tool?.name).toBe('test-tool');
       expect(tool?.description).toBe('Test tool');
-      expect(tool?.inputSchema).toHaveProperty('name');
+      expect(tool?.inputSchema.shape).toHaveProperty('name');
       expect(tool?.title).toBeUndefined();
 
       const resource = server.getResource('test-resource');
@@ -304,15 +304,15 @@ describe('MCPServer Error Handling', () => {
       const toolHandler = vi.fn();
       
       try {
-        server.registerTool('', { description: 'Test', inputSchema: {} }, toolHandler);
+        server.registerTool('', { description: 'Test', inputSchema: z.object({}) }, toolHandler);
       } catch (error) {
         expect(error.code).toBe(MCPErrorCode.InvalidParams);
         expect(error.data?.type).toBe('invalid_params');
       }
 
       try {
-        server.registerTool('test', { description: 'Test', inputSchema: {} }, toolHandler);
-        server.registerTool('test', { description: 'Test', inputSchema: {} }, toolHandler);
+        server.registerTool('test', { description: 'Test', inputSchema: z.object({}) }, toolHandler);
+        server.registerTool('test', { description: 'Test', inputSchema: z.object({}) }, toolHandler);
       } catch (error) {
         expect(error.code).toBe(MCPErrorCode.InvalidParams);
         expect(error.data?.type).toBe('invalid_params');

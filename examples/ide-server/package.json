@@ -1,6 +1,6 @@
 {
     "name": "mcp-ide-server-example",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "MCP server with custom project management and git tools (can wrap Serena)",
     "main": "dist/index.js",
     "type": "module",

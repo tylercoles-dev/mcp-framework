@@ -1,6 +1,6 @@
 {
     "name": "@tylercoles/example-sse-server",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Example MCP server with SSE transport",
     "main": "dist/index.js",
     "private": true,

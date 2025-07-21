@@ -1,6 +1,6 @@
 {
   "name": "@tylercoles/mcp-auth-oidc",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Generic OpenID Connect (OIDC) authentication provider for MCP servers",
   "keywords": [
     "mcp",

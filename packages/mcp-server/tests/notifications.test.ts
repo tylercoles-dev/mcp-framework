@@ -240,7 +240,7 @@ describe('MCPServer Notifications', () => {
 
       server.registerTool('test-tool', {
         description: 'Test tool',
-        inputSchema: { name: z.string() }
+        inputSchema: z.object({ name: z.string() })
       }, toolHandler);
 
       // Give it a moment for the async notification to be sent
@@ -299,7 +299,7 @@ describe('MCPServer Notifications', () => {
 
       server.registerTool('test-tool-2', {
         description: 'Test tool 2',
-        inputSchema: { name: z.string() }
+        inputSchema: z.object({ name: z.string() })
       }, toolHandler);
 
       // Give it a moment to ensure no async notifications are sent
@@ -343,7 +343,7 @@ describe('MCPServer Notifications', () => {
       // Should not throw
       expect(() => server.registerTool('test-tool', {
         description: 'Test tool',
-        inputSchema: { name: z.string() }
+        inputSchema: z.object({ name: z.string() })
       }, toolHandler)).not.toThrow();
 
       await server.stop();

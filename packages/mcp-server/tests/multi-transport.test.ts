@@ -51,7 +51,7 @@ describe('Multi-Transport Support', () => {
       {
         title: 'Test Tool',
         description: 'A test tool',
-        inputSchema: { message: z.string() }
+        inputSchema: z.object({ message: z.string() })
       },
       async ({ message }) => ({
         content: [{ type: 'text', text: message }]
@@ -97,8 +97,8 @@ describe('Multi-Transport Support', () => {
 
   test('should provide capability summary', () => {
     // Register multiple items
-    server.registerTool('tool1', { description: 'Tool 1', inputSchema: {} }, async () => ({ content: [] }));
-    server.registerTool('tool2', { description: 'Tool 2', inputSchema: {} }, async () => ({ content: [] }));
+    server.registerTool('tool1', { description: 'Tool 1', inputSchema: z.object({}) }, async () => ({ content: [] }));
+    server.registerTool('tool2', { description: 'Tool 2', inputSchema: z.object({}) }, async () => ({ content: [] }));
     
     server.registerResource('res1', 'res://1', {}, async () => ({ contents: [] }));
     
@@ -117,7 +117,7 @@ describe('Multi-Transport Support', () => {
       'context-test',
       {
         description: 'Test context',
-        inputSchema: {}
+        inputSchema: z.object({})
       },
       async (_, context) => {
         capturedContext = context;

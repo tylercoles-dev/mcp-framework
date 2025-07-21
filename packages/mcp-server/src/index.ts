@@ -1,8 +1,9 @@
 import { ResourceMetadata, McpServer as SDKMcpServer, ToolCallback, ResourceTemplate as SDKResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol";
-import { CallToolResult, ServerNotification, ServerRequest, CompleteRequestSchema, CreateMessageRequestSchema, CompleteResult, CreateMessageResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, ServerNotification, ServerRequest, CompleteRequestSchema, CreateMessageRequestSchema, CompleteResult, CreateMessageResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z, ZodRawShape, ZodTypeAny } from "zod";
 import { MCPErrorFactory, MCPErrorClass, MCPError, MCPErrorCode } from "./errors.js";
+import { SdkToolConfig, SdkToolResult } from "./tools.js";
 
 /**
  * MCP Notification interfaces
@@ -55,6 +56,10 @@ export interface PromptListChangedNotification {
   method: 'notifications/prompts/list_changed';
   params?: {};
 }
+
+export interface InputArgs extends ZodRawShape { }
+export interface OutputArgs extends ZodRawShape { }
+
 
 /**
  * RFC 5424 Log Severity Levels
@@ -292,7 +297,7 @@ export class SessionManager {
     if (!sessionData) return null;
 
     const now = Date.now();
-    
+
     // Check if session has expired
     if (now > sessionData.expiresAt) {
       this.sessions.delete(key);
@@ -403,7 +408,7 @@ export class SessionManager {
 export type ToolHandler<InputArgs extends ZodRawShape> = (
   args: z.infer<z.ZodObject<InputArgs>>,
   context: ToolContext
-) => Promise<CallToolResult>;
+) => Promise<SdkToolResult>;
 
 /**
  * Tool configuration
@@ -768,7 +773,7 @@ export class RequestTracer {
    */
   startTrace(operation: string, context?: ToolContext): ToolContext {
     const enhancedContext = CorrelationManager.enhanceContext(context);
-    
+
     this.performanceTracker.startTracking(
       enhancedContext.correlationId!,
       operation,
@@ -916,11 +921,11 @@ export interface ServerConfig {
 /**
  * Tool information
  */
-export interface ToolInfo {
+export interface ToolInfo<ToolInputs extends InputArgs = InputArgs> {
   name: string;
   title?: string;
   description: string;
-  inputSchema: any;
+  inputSchema: z.ZodObject<ToolInputs>;
 }
 
 /**
@@ -974,22 +979,22 @@ export interface PaginatedResult<T> {
 /**
  * Paginated tools result
  */
-export interface PaginatedToolsResult extends PaginatedResult<ToolInfo> {}
+export interface PaginatedToolsResult extends PaginatedResult<ToolInfo> { }
 
 /**
  * Paginated resources result
  */
-export interface PaginatedResourcesResult extends PaginatedResult<ResourceInfo> {}
+export interface PaginatedResourcesResult extends PaginatedResult<ResourceInfo> { }
 
 /**
  * Paginated prompts result
  */
-export interface PaginatedPromptsResult extends PaginatedResult<PromptInfo> {}
+export interface PaginatedPromptsResult extends PaginatedResult<PromptInfo> { }
 
 /**
  * Paginated resource templates result
  */
-export interface PaginatedResourceTemplatesResult extends PaginatedResult<ResourceTemplateInfo> {}
+export interface PaginatedResourceTemplatesResult extends PaginatedResult<ResourceTemplateInfo> { }
 
 export class MCPServer {
   private config: ServerConfig;
@@ -999,7 +1004,7 @@ export class MCPServer {
   private started = false;
 
   // Track registered items for introspection
-  private tools: Map<string, ToolInfo> = new Map();
+  private tools: Map<string, ToolInfo<InputArgs>> = new Map();
   private resources: Map<string, ResourceInfo> = new Map();
   private resourceTemplates: Map<string, ResourceTemplateInfo> = new Map();
   private prompts: Map<string, PromptInfo> = new Map();
@@ -1097,7 +1102,7 @@ export class MCPServer {
 
     const payload = JSON.stringify(cursor);
     const signature = this.createHMAC(payload);
-    
+
     return Buffer.from(JSON.stringify({
       payload,
       signature
@@ -1111,14 +1116,14 @@ export class MCPServer {
     try {
       const decoded = JSON.parse(Buffer.from(cursorString, 'base64').toString());
       const { payload, signature } = decoded;
-      
+
       // Verify signature
       if (this.createHMAC(payload) !== signature) {
         return null;
       }
 
       const cursor: PaginationCursor = JSON.parse(payload);
-      
+
       // Check expiration
       if (Date.now() - cursor.timestamp > this.paginationDefaults.cursorTTL) {
         return null;
@@ -1159,9 +1164,9 @@ export class MCPServer {
 
     // Sort items by name for stable pagination
     const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
-    
+
     let startIndex = 0;
-    
+
     // If cursor provided, find starting position
     if (options.cursor) {
       const cursor = this.parseCursor(options.cursor);
@@ -1176,7 +1181,7 @@ export class MCPServer {
     const endIndex = startIndex + limit;
     const paginatedItems = sortedItems.slice(startIndex, endIndex);
     const hasMore = endIndex < sortedItems.length;
-    
+
     let nextCursor: string | undefined;
     if (hasMore && paginatedItems.length > 0) {
       const lastItem = paginatedItems[paginatedItems.length - 1];
@@ -1213,13 +1218,13 @@ export class MCPServer {
    */
   setContext(context: Partial<ToolContext>): void {
     this.context = { ...this.context, ...context };
-    
+
     // Store session if session management is enabled and context has session ID
     if (this.sessionManager && this.context.sessionId) {
       // Get existing session context to merge with
       const existingSession = this.sessionManager.retrieveSession(this.context);
-      const sessionContext = existingSession ? 
-        { ...existingSession, ...this.context } : 
+      const sessionContext = existingSession ?
+        { ...existingSession, ...this.context } :
         this.context;
       this.sessionManager.storeSession(sessionContext);
     }
@@ -1230,7 +1235,7 @@ export class MCPServer {
    */
   getContext(): ToolContext {
     let resultContext = { ...this.context };
-    
+
     // Attempt to restore session if available
     if (this.sessionManager) {
       const restoredContext = this.sessionManager.retrieveSession(this.context);
@@ -1239,7 +1244,7 @@ export class MCPServer {
         resultContext = { ...restoredContext, ...this.context };
       }
     }
-    
+
     return resultContext;
   }
 
@@ -1248,7 +1253,7 @@ export class MCPServer {
    */
   setSessionContext(sessionKey: string, context: Partial<ToolContext>): boolean {
     if (!this.sessionManager) return false;
-    
+
     const sessionContext = { ...context, sessionId: sessionKey };
     return this.sessionManager.storeSession(sessionContext);
   }
@@ -1258,7 +1263,7 @@ export class MCPServer {
    */
   getSessionContext(sessionKey: string): ToolContext | null {
     if (!this.sessionManager) return null;
-    
+
     return this.sessionManager.retrieveSession({ sessionId: sessionKey });
   }
 
@@ -1267,7 +1272,7 @@ export class MCPServer {
    */
   deleteSession(sessionKey: string): boolean {
     if (!this.sessionManager) return false;
-    
+
     return this.sessionManager.deleteSession({ sessionId: sessionKey });
   }
 
@@ -1278,17 +1283,17 @@ export class MCPServer {
     if (!this.sessionManager) {
       return { enabled: false, totalSessions: 0, maxSessions: 0, activeSessions: 0 };
     }
-    
+
     return this.sessionManager.getSessionStats();
   }
 
   /**
    * Register a tool with the server
    */
-  registerTool<InputArgs extends ZodRawShape>(
+  registerTool<ToolInputs extends InputArgs>(
     name: string,
-    config: ToolConfig<InputArgs>,
-    handler: ToolHandler<InputArgs>
+    config: ToolConfig<ToolInputs>,
+    handler: ToolHandler<ToolInputs>
   ): void {
     // Validate tool name
     if (!name || typeof name !== 'string') {
@@ -1315,39 +1320,39 @@ export class MCPServer {
       name,
       title: config.title,
       description: config.description,
-      inputSchema: config.inputSchema
+      inputSchema: config.inputSchema,
     });
 
     // Create the tool config object for SDK
     // The SDK expects a ZodRawShape (the shape object), not a complete Zod schema
-    const toolConfig: any = {
+    const toolConfig: SdkToolConfig<ToolInputs> = {
       description: config.description,
-      inputSchema: config.inputSchema.shape
+      inputSchema: config.inputSchema.shape,
     };
-    
+
     if (config.title) {
       toolConfig.title = config.title;
     }
 
     this.sdkServer.registerTool(
       name,
-      toolConfig,
+      toolConfig as any,
       async (args: any, extra: any) => {
         // Start request tracing
         const tracedContext = this.requestTracer.startTrace(`tool_call:${name}`, this.getContext());
-        
+
         try {
           const result = await handler(args, tracedContext);
-          
+
           // End tracing successfully
           this.requestTracer.endTrace(tracedContext, true, undefined, JSON.stringify(result).length);
-          
+
           return result;
         } catch (error) {
           // End tracing with error
           const mcpError = MCPErrorFactory.fromError(error);
           this.requestTracer.endTrace(tracedContext, false, mcpError.code?.toString());
-          
+
           throw mcpError;
         }
       }
@@ -1393,19 +1398,19 @@ export class MCPServer {
     const wrappedHandler = async (uri: URL, params?: any) => {
       // Start request tracing
       const tracedContext = this.requestTracer.startTrace(`resource_read:${name}`, this.getContext());
-      
+
       try {
         const result = await handler(uri, params);
-        
+
         // End tracing successfully
         this.requestTracer.endTrace(tracedContext, true, undefined, JSON.stringify(result).length);
-        
+
         return result;
       } catch (error) {
         // End tracing with error
         const mcpError = MCPErrorFactory.fromError(error);
         this.requestTracer.endTrace(tracedContext, false, mcpError.code?.toString());
-        
+
         throw mcpError;
       }
     };
@@ -1448,7 +1453,7 @@ export class MCPServer {
 
     // Create the prompt config object for SDK
     const promptConfig: any = {};
-    
+
     if (config.title) {
       promptConfig.title = config.title;
     }
@@ -1464,19 +1469,19 @@ export class MCPServer {
     const wrappedHandler = async (args: T) => {
       // Start request tracing
       const tracedContext = this.requestTracer.startTrace(`prompt_get:${name}`, this.getContext());
-      
+
       try {
         const result = handler(args);
-        
+
         // End tracing successfully
         this.requestTracer.endTrace(tracedContext, true, undefined, JSON.stringify(result).length);
-        
+
         return result;
       } catch (error) {
         // End tracing with error
         const mcpError = MCPErrorFactory.fromError(error);
         this.requestTracer.endTrace(tracedContext, false, mcpError.code?.toString());
-        
+
         throw mcpError;
       }
     };
@@ -1507,11 +1512,11 @@ export class MCPServer {
     if (jsonSchema.type === 'object' && jsonSchema.properties) {
       const shape: any = {};
       const required = jsonSchema.required || [];
-      
+
       for (const [key, prop] of Object.entries(jsonSchema.properties)) {
         const propSchema = prop as any;
         let zodType: any;
-        
+
         switch (propSchema.type) {
           case 'string':
             zodType = z.string();
@@ -1534,23 +1539,23 @@ export class MCPServer {
           default:
             zodType = z.any();
         }
-        
+
         // Add description if present
         if (propSchema.description) {
           zodType = zodType.describe(propSchema.description);
         }
-        
+
         // Make optional if not in required array
         if (!required.includes(key)) {
           zodType = zodType.optional();
         }
-        
+
         shape[key] = zodType;
       }
-      
+
       return shape;
     }
-    
+
     return {};
   }
 
@@ -1781,7 +1786,7 @@ export class MCPServer {
   ): Promise<void> {
     // Normalize invalid log levels to Info for validation and processing
     const normalizedLevel = this.isValidLogLevel(level) ? level : LogLevel.Info;
-    
+
     // Check if this log should be sent based on level filtering
     if (!this.shouldLog(normalizedLevel, logger)) {
       return;
@@ -1873,7 +1878,7 @@ export class MCPServer {
       if (this.loggingConfig.loggers.has(logger)) {
         return level <= this.loggingConfig.loggers.get(logger)!;
       }
-      
+
       // Then try hierarchical matching (e.g., 'app.debug' -> 'app')
       const parts = logger.split('.');
       for (let i = parts.length - 1; i > 0; i--) {
@@ -1883,7 +1888,7 @@ export class MCPServer {
         }
       }
     }
-    
+
     // Fall back to global level
     return level <= this.loggingConfig.level;
   }
@@ -2066,7 +2071,7 @@ export class MCPServer {
       if (typeof options.cursor !== 'string' || options.cursor.length === 0) {
         throw MCPErrorFactory.invalidParams('Cursor must be a non-empty string');
       }
-      
+
       const parsedCursor = this.parseCursor(options.cursor);
       if (!parsedCursor) {
         throw MCPErrorFactory.invalidParams('Invalid or expired cursor');
@@ -2129,7 +2134,7 @@ export class MCPServer {
       try {
         // Extract template parameters from URI
         const templateParams = this.extractTemplateParams(uriTemplate, uri.toString());
-        
+
         // Validate parameters against schema if provided
         if (config.parameterSchema) {
           this.validateTemplateParams(templateParams, config.parameterSchema);
@@ -2207,7 +2212,7 @@ export class MCPServer {
     // Check for properly formatted variables
     const bracePattern = /\{([^}]+)\}/g;
     const matches = uriTemplate.match(bracePattern);
-    
+
     if (!matches) {
       return true; // No template variables is valid
     }
@@ -2226,7 +2231,7 @@ export class MCPServer {
     // Convert URI template to regex pattern
     const regexPattern = uriTemplate.replace(/\{([^}]+)\}/g, '([^/]+)');
     const regex = new RegExp(`^${regexPattern}$`);
-    
+
     const match = uri.match(regex);
     if (!match) {
       throw MCPErrorFactory.invalidParams(`URI '${uri}' does not match template '${uriTemplate}'`);
@@ -2335,7 +2340,7 @@ export class MCPServer {
       // Handlers with supportedArguments are more specific
       const aHasArgs = configA.config.supportedArguments && configA.config.supportedArguments.length > 0;
       const bHasArgs = configB.config.supportedArguments && configB.config.supportedArguments.length > 0;
-      
+
       if (aHasArgs && !bHasArgs) return -1; // a is more specific
       if (!aHasArgs && bHasArgs) return 1;  // b is more specific
       return 0; // same specificity
@@ -2449,7 +2454,7 @@ export class MCPServer {
 
         // Extract possible values from prompt arguments schema
         const values: string[] = [];
-        
+
         // If the prompt has argument schema, provide completions
         if (prompt.arguments && Array.isArray(prompt.arguments)) {
           // Check if the requested argument is defined in the prompt schema
@@ -2458,7 +2463,7 @@ export class MCPServer {
             values.push(...this.getCommonCompletions(request.argument.name, request.argument.value));
           }
         }
-        
+
         // Always provide basic completions even if no specific argument schema exists
         if (values.length === 0) {
           values.push(...this.getCommonCompletions(request.argument.name, request.argument.value));
@@ -2488,7 +2493,7 @@ export class MCPServer {
       async (request) => {
         const resource = this.getResource(request.ref.name);
         const template = this.getResourceTemplate(request.ref.name);
-        
+
         if (!resource && !template) {
           throw MCPErrorFactory.invalidParams(`Resource '${request.ref.name}' not found`);
         }
@@ -2528,7 +2533,7 @@ export class MCPServer {
       // For file arguments, append extensions to the current value
       suggestions.push(
         partialValue + '.txt',
-        partialValue + '.json', 
+        partialValue + '.json',
         partialValue + '.md',
         partialValue + '.csv',
         partialValue + '.xml'
@@ -2563,11 +2568,11 @@ export class MCPServer {
     const variables: string[] = [];
     const varPattern = /\{([^}]+)\}/g;
     let match;
-    
+
     while ((match = varPattern.exec(uriTemplate)) !== null) {
       variables.push(match[1]);
     }
-    
+
     return variables;
   }
 
@@ -2643,10 +2648,10 @@ export class MCPServer {
 
     try {
       const response = await this.samplingConfig.createMessage(processedRequest);
-      
+
       // Validate response format
       this.validateSamplingResponse(response);
-      
+
       return response;
     } catch (error) {
       if (error instanceof Error) {

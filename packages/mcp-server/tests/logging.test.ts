@@ -5,7 +5,8 @@ import {
   type LogLevelName,
   type LoggingConfig,
   type LoggingCapabilities,
-  type StructuredLogEntry
+  type StructuredLogEntry,
+  z
 } from '../src/index.js';
 
 // Mock the SDK server
@@ -392,10 +393,7 @@ describe('MCP Advanced Logging System', () => {
         'logging-tool',
         {
           description: 'A tool that logs',
-          inputSchema: {
-            type: 'object',
-            properties: {}
-          }
+          inputSchema: z.object({})
         },
         async () => {
           await server.logInfo('Tool executed', { tool: 'logging-tool' }, 'tools.logging-tool');

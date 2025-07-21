@@ -1,6 +1,6 @@
 {
     "name": "@tylercoles/example-multi-transport-server",
-    "version": "0.0.0",
+    "version": "0.0.1",
     "description": "Example MCP server with multiple transports",
     "private": true,
     "main": "dist/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@tylercoles/mcp-client",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Base interfaces and types for MCP clients",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

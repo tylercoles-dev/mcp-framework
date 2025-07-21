@@ -1,6 +1,6 @@
 {
   "name": "@tylercoles/mcp-auth-authentik",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Authentik OAuth2/OIDC authentication provider for MCP servers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

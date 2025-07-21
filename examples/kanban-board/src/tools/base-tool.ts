@@ -10,26 +10,4 @@ export abstract class BaseTool {
 
   abstract registerTools(server: MCPServer): void;
 
-  protected createErrorResult(error: unknown): ToolResult {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  protected createSuccessResult(message: string): ToolResult {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: message,
-        },
-      ],
-    };
-  }
 }

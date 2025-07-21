@@ -1,6 +1,6 @@
 {
     "name": "@tylercoles/example-echo-server",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Simple MCP server example demonstrating basic framework features",
     "type": "module",
     "main": "dist/index.js",

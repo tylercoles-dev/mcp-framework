@@ -132,7 +132,7 @@ describe('MCPServer - Comprehensive Tests', () => {
         {
           title: 'Test Tool',
           description: 'A test tool',
-          inputSchema: { message: z.string() }
+          inputSchema: z.object({ message: z.string() })
         },
         handler
       );
@@ -154,7 +154,7 @@ describe('MCPServer - Comprehensive Tests', () => {
       expect(tools[0].title).toBe('Test Tool');
       expect(tools[0].description).toBe('A test tool');
       expect(tools[0].inputSchema).toBeDefined();
-      expect(tools[0].inputSchema.message).toBeDefined();
+      expect(tools[0].inputSchema.shape.message).toBeDefined();
     });
 
     it('should inject context into tool handler', async () => {
@@ -164,7 +164,7 @@ describe('MCPServer - Comprehensive Tests', () => {
         return { content: [{ type: 'text', text: 'result' }] };
       });
 
-      server.registerTool('test_tool', { description: 'Test', inputSchema: {} }, handler);
+      server.registerTool('test_tool', { description: 'Test', inputSchema: z.object({}) }, handler);
       server.setContext({ user: { id: '123', username: 'test' }, custom: 'value' });
 
       // Get the wrapped handler that was passed to SDK
@@ -187,15 +187,15 @@ describe('MCPServer - Comprehensive Tests', () => {
     it('should handle tool errors gracefully', async () => {
       const handler = vi.fn().mockRejectedValue(new Error('Tool error'));
 
-      server.registerTool('test_tool', { description: 'Test', inputSchema: {} }, handler);
+      server.registerTool('test_tool', { description: 'Test', inputSchema: z.object({}) }, handler);
 
       const wrappedHandler = mockSDKServer.registerTool.mock.calls[0][2];
       await expect(wrappedHandler({})).rejects.toThrow('Tool error');
     });
 
     it('should get specific tool by name', () => {
-      server.registerTool('tool1', { description: 'Tool 1', inputSchema: {} }, vi.fn());
-      server.registerTool('tool2', { description: 'Tool 2', inputSchema: {} }, vi.fn());
+      server.registerTool('tool1', { description: 'Tool 1', inputSchema: z.object({}) }, vi.fn());
+      server.registerTool('tool2', { description: 'Tool 2', inputSchema: z.object({}) }, vi.fn());
 
       const tool = server.getTool('tool1');
       expect(tool).toBeDefined();
@@ -285,7 +285,12 @@ describe('MCPServer - Comprehensive Tests', () => {
         {
           title: 'Test Prompt',
           description: 'A test prompt',
-          argsSchema: { topic: z.string() }
+          argsSchema: {
+            type: 'object',
+            properties: {
+              topic: { type: 'string' }
+            }
+          }
         },
         handler
       );
@@ -368,8 +373,8 @@ describe('MCPServer - Comprehensive Tests', () => {
   describe('Capabilities and Introspection', () => {
     beforeEach(() => {
       // Register various items
-      server.registerTool('tool1', { description: 'Tool 1', inputSchema: {} }, vi.fn());
-      server.registerTool('tool2', { title: 'Tool Two', description: 'Tool 2', inputSchema: {} }, vi.fn());
+      server.registerTool('tool1', { description: 'Tool 1', inputSchema: z.object({}) }, vi.fn());
+      server.registerTool('tool2', { title: 'Tool Two', description: 'Tool 2', inputSchema: z.object({}) }, vi.fn());
       
       server.registerResource('res1', 'uri1', { title: 'Resource One' }, vi.fn());
       
