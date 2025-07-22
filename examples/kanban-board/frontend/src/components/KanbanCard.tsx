@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Card, Tag, Comment } from '../types';
-import { CardEditor } from './CardEditor';
+import { CardView } from './CardView';
 
 interface KanbanCardProps {
   card: Card;
@@ -27,7 +28,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   onAddComment,
   onDeleteComment,
 }) => {
-  const [showEditor, setShowEditor] = useState(false);
+  const [showViewer, setShowViewer] = useState(false);
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData(
@@ -40,8 +41,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     );
   };
 
-  const handleOpenEditor = () => {
-    setShowEditor(true);
+  const handleOpenViewer = () => {
+    setShowViewer(true);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -63,15 +64,14 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   return (
     <>
       <div
-        className={`kanban-card ${isOverdue ? 'overdue' : ''}`}
+        className={`card ${isOverdue ? 'overdue' : ''}`}
         draggable={true}
         onDragStart={handleDragStart}
-        onClick={handleOpenEditor}
+        onClick={handleOpenViewer}
       >
         <div className="card-header">
           <div 
-            className="priority-indicator"
-            style={{ backgroundColor: getPriorityColor(card.priority) }}
+            className={`card-priority-indicator priority-${card.priority}`}
             title={`Priority: ${card.priority}`}
           />
           <div className="card-actions">
@@ -79,59 +79,74 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               className="btn-icon"
               onClick={(e) => {
                 e.stopPropagation();
-                handleOpenEditor();
+                handleOpenViewer();
               }}
-              title="Edit card"
+              title="View card"
             >
-              ✏️
+              👁️
             </button>
           </div>
         </div>
 
-        <div className="card-content">
-          <h4 className="card-title">{card.title}</h4>
-          {card.description && (
-            <p className="card-description">{card.description}</p>
+        <h4 className="card-title">{card.title}</h4>
+        
+        {card.description && (
+          <div className="card-description">
+            <ReactMarkdown
+              components={{
+                // Override components to ensure they fit within card layout
+                h1: ({ children }) => <h4 style={{ fontSize: '1.1em', margin: '0.5em 0 0.3em 0' }}>{children}</h4>,
+                h2: ({ children }) => <h5 style={{ fontSize: '1.05em', margin: '0.4em 0 0.2em 0' }}>{children}</h5>,
+                h3: ({ children }) => <h6 style={{ fontSize: '1em', margin: '0.3em 0 0.2em 0' }}>{children}</h6>,
+                p: ({ children }) => <p style={{ margin: '0.3em 0' }}>{children}</p>,
+                ul: ({ children }) => <ul style={{ margin: '0.3em 0', paddingLeft: '1.2em' }}>{children}</ul>,
+                ol: ({ children }) => <ol style={{ margin: '0.3em 0', paddingLeft: '1.2em' }}>{children}</ol>,
+                code: ({ children }) => <code style={{ background: '#f4f4f4', padding: '0.1em 0.3em', borderRadius: '3px' }}>{children}</code>,
+                a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>{children}</a>
+              }}
+            >
+              {card.description}
+            </ReactMarkdown>
+          </div>
+        )}
+        
+        <div className="card-meta">
+          {card.assigned_to && (
+            <div className="card-assignee">
+              👤 {card.assigned_to}
+            </div>
           )}
           
-          <div className="card-meta">
-            {card.assigned_to && (
-              <div className="assignee">
-                👤 {card.assigned_to}
-              </div>
-            )}
-            
-            {card.due_date && (
-              <div className={`due-date ${isOverdue ? 'overdue' : ''}`}>
-                📅 {formatDate(card.due_date)}
-              </div>
-            )}
-            
-            {card.tags.length > 0 && (
-              <div className="tags">
-                {card.tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="tag"
-                    style={{ backgroundColor: tag.color }}
-                  >
-                    {tag.name}
-                  </span>
-                ))}
-              </div>
-            )}
+          {card.due_date && (
+            <div className={`card-due-date ${isOverdue ? 'overdue' : ''}`}>
+              📅 {formatDate(card.due_date)}
+            </div>
+          )}
+          
+          {card.tags.length > 0 && (
+            <div className="card-tags">
+              {card.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="card-tag"
+                  style={{ backgroundColor: tag.color }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
 
-            {comments.length > 0 && (
-              <div className="comment-indicator">
-                💬 {comments.length} comment{comments.length !== 1 ? 's' : ''}
-              </div>
-            )}
-          </div>
+          {comments.length > 0 && (
+            <div className="card-comments">
+              💬 {comments.length} comment{comments.length !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       </div>
 
-      {showEditor && (
-        <CardEditor
+      {showViewer && (
+        <CardView
           card={card}
           availableTags={availableTags}
           comments={comments}
@@ -139,7 +154,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
           onDelete={onDeleteCard}
           onAddComment={onAddComment}
           onDeleteComment={onDeleteComment}
-          onClose={() => setShowEditor(false)}
+          onClose={() => setShowViewer(false)}
         />
       )}
     </>

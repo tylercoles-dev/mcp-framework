@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Column } from '../types';
 
 interface ColumnManagerProps {
@@ -102,15 +103,29 @@ export function ColumnManager({
     onChange: (color: string) => void; 
     label?: string;
   }) => (
-    <div className="color-picker-section">
-      {label && <label className="color-picker-label">{label}</label>}
-      <div className="color-picker-grid">
+    <div className="form-group">
+      {label && <label className="form-label">{label}</label>}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(5, 1fr)', 
+        gap: 'var(--spacing-xs)',
+        marginTop: 'var(--spacing-xs)'
+      }}>
         {DEFAULT_COLORS.map((color) => (
           <button
             key={color}
             type="button"
-            className={`color-option ${value === color ? 'selected' : ''}`}
-            style={{ backgroundColor: color }}
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--radius-md)',
+              border: value === color ? '3px solid var(--color-text-primary)' : '2px solid var(--color-border)',
+              backgroundColor: color,
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)',
+              transform: value === color ? 'scale(1.1)' : 'scale(1)',
+              boxShadow: value === color ? 'var(--shadow-md)' : 'var(--shadow-xs)'
+            }}
             onClick={() => onChange(color)}
             title={color}
           />
@@ -119,24 +134,33 @@ export function ColumnManager({
     </div>
   );
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal column-manager-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: '700px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Manage Columns</h3>
+          <h3 className="modal-title">Manage Columns</h3>
           <button onClick={onClose} className="btn-close">✕</button>
         </div>
 
-        <div className="modal-content">
-          <div className="column-manager-content">
-            {/* Add New Column Form */}
-            <form onSubmit={handleCreateColumn} className="add-column-form">
-              <h4>Add New Column</h4>
+        <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          {/* Add New Column Form */}
+          <div style={{ 
+            background: 'var(--color-bg-tertiary)', 
+            padding: 'var(--spacing-lg)', 
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-border)',
+            marginBottom: 'var(--spacing-lg)'
+          }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: 'var(--spacing-md)', color: 'var(--color-text-primary)' }}>
+              Add New Column
+            </h4>
+            <form onSubmit={handleCreateColumn}>
               <div className="form-group">
-                <label htmlFor="new-column-name">Column Name</label>
+                <label htmlFor="new-column-name" className="form-label">Column Name *</label>
                 <input
                   id="new-column-name"
                   type="text"
+                  className="form-input"
                   value={newColumnName}
                   onChange={(e) => setNewColumnName(e.target.value)}
                   placeholder="Enter column name"
@@ -150,135 +174,168 @@ export function ColumnManager({
                 label="Column Color"
               />
 
-              <div className="form-actions">
-                <button type="submit" className="btn btn-primary" disabled={!newColumnName.trim()}>
-                  Add Column
-                </button>
-              </div>
+              <button type="submit" className="btn btn-primary" disabled={!newColumnName.trim()}>
+                Add Column
+              </button>
             </form>
+          </div>
 
-            {/* Existing Columns */}
-            <div className="existing-columns">
-              <h4>Existing Columns ({sortedColumns.length})</h4>
-              {sortedColumns.length === 0 ? (
-                <div className="no-columns">
-                  <p>No columns yet. Add one above to get started.</p>
-                </div>
-              ) : (
-                <div className="columns-list">
-                  {sortedColumns.map((column, index) => (
-                    <div key={column.id} className="column-item">
-                      <div className="column-preview">
-                        <div 
-                          className="column-color-indicator"
-                          style={{ backgroundColor: column.color }}
-                        />
-                        <div className="column-position">#{index + 1}</div>
-                      </div>
-
-                      <div className="column-details">
-                        {editingColumn === column.id ? (
-                          <div className="edit-column-form">
-                            <div className="form-group">
-                              <input
-                                type="text"
-                                value={editFormData.name}
-                                onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') saveEdit(column.id);
-                                  if (e.key === 'Escape') cancelEdit();
-                                }}
-                                placeholder="Column name"
-                                autoFocus
-                              />
-                            </div>
-                            
-                            <ColorPicker 
-                              value={editFormData.color}
-                              onChange={(color) => setEditFormData(prev => ({ ...prev, color }))}
-                            />
-
-                            <div className="edit-actions">
-                              <button 
-                                onClick={() => saveEdit(column.id)} 
-                                className="btn btn-sm btn-primary"
-                                disabled={!editFormData.name.trim()}
-                              >
-                                Save
-                              </button>
-                              <button onClick={cancelEdit} className="btn btn-sm btn-secondary">
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="column-display">
-                            <div className="column-info">
-                              <h5 className="column-name">{column.name}</h5>
-                              <p className="card-count">
-                                {column.cards?.length || 0} card{(column.cards?.length || 0) !== 1 ? 's' : ''}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="column-actions">
-                        {editingColumn !== column.id && (
-                          <>
-                            <button
-                              onClick={() => moveColumn(column.id, 'up')}
-                              disabled={index === 0}
-                              className="btn btn-sm btn-icon"
-                              title="Move up"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              onClick={() => moveColumn(column.id, 'down')}
-                              disabled={index === sortedColumns.length - 1}
-                              className="btn btn-sm btn-icon"
-                              title="Move down"
-                            >
-                              ↓
-                            </button>
-                            <button
-                              onClick={() => startEdit(column)}
-                              className="btn btn-sm btn-secondary"
-                              title="Edit column"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Delete column "${column.name}" and all its cards?`)) {
-                                  onDeleteColumn(column.id);
-                                }
-                              }}
-                              className="btn btn-sm btn-danger"
-                              title="Delete column"
-                            >
-                              🗑️
-                            </button>
-                          </>
-                        )}
-                      </div>
+          {/* Existing Columns */}
+          <div>
+            <h4 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: 'var(--spacing-md)', color: 'var(--color-text-primary)' }}>
+              Existing Columns ({sortedColumns.length})
+            </h4>
+            {sortedColumns.length === 0 ? (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: 'var(--spacing-xl)', 
+                color: 'var(--color-text-tertiary)',
+                fontStyle: 'italic'
+              }}>
+                No columns yet. Add one above to get started.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+                {sortedColumns.map((column, index) => (
+                  <div key={column.id} style={{
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: 'var(--spacing-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--spacing-md)'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 'var(--spacing-sm)',
+                      minWidth: '60px'
+                    }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: column.color,
+                        border: '2px solid var(--color-border)'
+                      }} />
+                      <span style={{ 
+                        fontSize: '0.875rem', 
+                        fontWeight: '600', 
+                        color: 'var(--color-text-secondary)'
+                      }}>
+                        #{index + 1}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                    <div style={{ flex: '1' }}>
+                      {editingColumn === column.id ? (
+                        <div>
+                          <div className="form-group" style={{ marginBottom: 'var(--spacing-sm)' }}>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={editFormData.name}
+                              onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveEdit(column.id);
+                                if (e.key === 'Escape') cancelEdit();
+                              }}
+                              placeholder="Column name"
+                              autoFocus
+                            />
+                          </div>
+                          
+                          <ColorPicker 
+                            value={editFormData.color}
+                            onChange={(color) => setEditFormData(prev => ({ ...prev, color }))}
+                          />
+
+                          <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }}>
+                            <button 
+                              onClick={() => saveEdit(column.id)} 
+                              className="btn btn-sm btn-primary"
+                              disabled={!editFormData.name.trim()}
+                            >
+                              Save
+                            </button>
+                            <button onClick={cancelEdit} className="btn btn-sm btn-secondary">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <h5 style={{ fontSize: '1rem', fontWeight: '600', margin: '0 0 var(--spacing-xs) 0', color: 'var(--color-text-primary)' }}>
+                            {column.name}
+                          </h5>
+                          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: '0' }}>
+                            {column.cards?.length || 0} card{(column.cards?.length || 0) !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 'var(--spacing-xs)', alignItems: 'center' }}>
+                      {editingColumn !== column.id && (
+                        <>
+                          <button
+                            onClick={() => moveColumn(column.id, 'up')}
+                            disabled={index === 0}
+                            className="btn-icon"
+                            title="Move up"
+                            style={{ opacity: index === 0 ? 0.3 : 1 }}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => moveColumn(column.id, 'down')}
+                            disabled={index === sortedColumns.length - 1}
+                            className="btn-icon"
+                            title="Move down"
+                            style={{ opacity: index === sortedColumns.length - 1 ? 0.3 : 1 }}
+                          >
+                            ↓
+                          </button>
+                          <button
+                            onClick={() => startEdit(column)}
+                            className="btn-icon"
+                            title="Edit column"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Delete column "${column.name}" and all its cards?`)) {
+                                onDeleteColumn(column.id);
+                              }
+                            }}
+                            className="btn-icon"
+                            title="Delete column"
+                            style={{ color: 'var(--color-danger)' }}
+                          >
+                            🗑️
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="modal-footer">
-          <div className="footer-right">
+          <div></div>
+          <div>
             <button onClick={onClose} className="btn btn-primary">
               Done
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

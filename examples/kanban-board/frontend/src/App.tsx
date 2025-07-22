@@ -5,12 +5,16 @@ import { CreateBoard } from './components/CreateBoard';
 import { BoardManager } from './components/BoardManager';
 import { ColumnManager } from './components/ColumnManager';
 import { UserSettings } from './components/UserSettings';
-import { UserAvatar } from './components/UserAvatar';
+import { Button } from './components/ui/Button';
+import { ThemeToggle } from './components/ui/ThemeToggle';
+import { ToastContainer } from './components/ui/Toast';
+import { LoadingSpinner, BoardSkeleton } from './components/ui/LoadingSkeleton';
 import { useKanbanStore } from './store/kanban-store';
 import { useWebSocket } from './hooks/use-websocket';
+import { useToast } from './hooks/useToast';
 import { Tag, Comment } from './types';
 import { getSelectedBoardId, updateSelectedBoard, getUserSettings } from './utils/localStorage';
-import './App.css';
+import './App.new.css';
 
 function App() {
   const [showCreateBoard, setShowCreateBoard] = useState(false);
@@ -24,7 +28,7 @@ function App() {
     selectedBoard,
     boardData,
     loading,
-    error,
+    error: storeError,
     connected,
     setSelectedBoard,
     setError,
@@ -36,6 +40,9 @@ function App() {
 
   // Initialize WebSocket connection
   const wsClient = useWebSocket('ws://localhost:3002');
+
+  // Toast notifications
+  const { toasts, removeToast, success, error: showError, info } = useToast();
 
   // Load saved board selection on mount
   useEffect(() => {
@@ -95,8 +102,9 @@ function App() {
     try {
       await wsClient.createBoard({ name, description, color });
       setShowCreateBoard(false);
+      success('Board created', `Successfully created "${name}" board`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create board');
+      showError('Failed to create board', err instanceof Error ? err.message : 'Unknown error occurred');
     }
   };
 
@@ -111,7 +119,7 @@ function App() {
         description,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create card');
+      showError('Failed to create card', err instanceof Error ? err.message : 'Unknown error occurred');
     }
   };
 
@@ -121,7 +129,7 @@ function App() {
     try {
       await wsClient.moveCard(cardId, columnId, position);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to move card');
+      showError('Failed to move card', err instanceof Error ? err.message : 'Unknown error occurred');
     }
   };
 
@@ -239,9 +247,20 @@ function App() {
 
   if (loading && !boardData) {
     return (
-      <div className="loading">
-        <div className="spinner"></div>
-        <p>Loading kanban board...</p>
+      <div className="app">
+        <header className="app-header">
+          <div className="header-content">
+            <div className="header-left">
+              <div className="app-title">
+                <div className="app-title-icon">K</div>
+                Kanban Board
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="app-main">
+          <BoardSkeleton />
+        </main>
       </div>
     );
   }
@@ -249,48 +268,59 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🗂️ Kanban Board <span style={{fontSize: '0.6em', color: connected ? '#4CAF50' : '#f44336'}}>({connected ? 'Real-time' : 'Disconnected'})</span></h1>
-        <div className="header-controls">
-          <BoardSelector
-            boards={boards}
-            selectedBoard={selectedBoard}
-            onSelectBoard={setSelectedBoard}
-          />
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowCreateBoard(true)}
-            disabled={!connected}
-          >
-            + New Board
-          </button>
-          {selectedBoard && boardData && (
-            <>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setShowBoardManager(true)}
-                disabled={!connected}
-              >
-                Manage Board
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setShowColumnManager(true)}
-                disabled={!connected}
-              >
-                Manage Columns
-              </button>
-            </>
-          )}
-          <UserAvatar onClick={() => setShowUserSettings(true)} />
+        <div className="header-content">
+          <div className="header-left">
+            <div className="app-title">
+              <div className="app-title-icon">K</div>
+              Kanban Board
+            </div>
+            <BoardSelector
+              boards={boards}
+              selectedBoard={selectedBoard}
+              onSelectBoard={setSelectedBoard}
+            />
+          </div>
+          <div className="user-menu">
+            <div className={`connection-status ${connected ? 'connected' : 'disconnected'}`}>
+              <div className="connection-dot" />
+              {connected ? 'Connected' : 'Disconnected'}
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateBoard(true)}
+              disabled={!connected}
+            >
+              + New Board
+            </Button>
+            {selectedBoard && boardData && (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowBoardManager(true)}
+                  disabled={!connected}
+                >
+                  Manage Board
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowColumnManager(true)}
+                  disabled={!connected}
+                >
+                  Manage Columns
+                </Button>
+              </>
+            )}
+            <ThemeToggle />
+            <Button
+              variant="secondary"
+              onClick={() => setShowUserSettings(true)}
+            >
+              👤 User
+            </Button>
+          </div>
         </div>
       </header>
 
-      {error && (
-        <div className="error-banner">
-          <p>⚠️ {error}</p>
-          <button onClick={() => setError(null)}>✕</button>
-        </div>
-      )}
 
       {showCreateBoard && (
         <CreateBoard
@@ -346,6 +376,9 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }

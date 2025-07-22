@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import ReactMarkdown from 'react-markdown';
 import { Card, Priority, Tag, Comment } from '../types';
 import { getUserSettings, getAutoFillCommentAuthor, updateAutoFillCommentAuthor } from '../utils/localStorage';
 
@@ -31,10 +33,13 @@ export const CardEditor: React.FC<CardEditorProps> = ({
     due_date: card.due_date || '',
   });
 
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [autoFillAuthor, setAutoFillAuthor] = useState(true);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Initialize auto-fill settings and comment author
   useEffect(() => {
@@ -66,6 +71,17 @@ export const CardEditor: React.FC<CardEditorProps> = ({
       ...prev,
       [field]: value
     }));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      if (window.confirm('You have unsaved changes. Are you sure you want to close without saving?')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
   };
 
   const handleSave = () => {
@@ -80,6 +96,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
     };
 
     onSave(card.id, updates);
+    setHasUnsavedChanges(false);
     onClose();
   };
 
@@ -113,24 +130,25 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 
   const isOverdue = card.due_date && new Date(card.due_date) < new Date();
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div className="modal-overlay" onClick={handleClose}>
       <div className="modal card-editor-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Edit Card</h3>
-          <button className="btn-close" onClick={onClose}>
+          <h3 className="modal-title">Edit Card</h3>
+          <button className="btn-close" onClick={handleClose}>
             ✕
           </button>
         </div>
 
-        <div className="modal-content">
+        <div className="modal-body">
           <div className="card-editor-form">
             {/* Title - Full Width */}
-            <div className="form-group title-group">
-              <label htmlFor="card-title">Title *</label>
+            <div className="form-group">
+              <label htmlFor="card-title" className="form-label">Title *</label>
               <input
                 id="card-title"
                 type="text"
+                className="form-input"
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
                 placeholder="Card title"
@@ -138,29 +156,62 @@ export const CardEditor: React.FC<CardEditorProps> = ({
               />
             </div>
 
-            {/* Two Column Layout */}
-            <div className="card-editor-columns">
-              {/* Left Column - Description */}
-              <div className="card-editor-left">
-                <div className="form-group">
-                  <label htmlFor="card-description">Description</label>
+              {/* Description with Markdown Support */}
+              <div className="form-group">
+                <div className="description-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-xs)' }}>
+                  <label htmlFor="card-description" className="form-label">Description</label>
+                  <div className="tab-buttons" style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${activeTab === 'edit' ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setActiveTab('edit')}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${activeTab === 'preview' ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setActiveTab('preview')}
+                    >
+                      Preview
+                    </button>
+                  </div>
+                </div>
+                
+                {activeTab === 'edit' ? (
                   <textarea
                     id="card-description"
+                    className="form-textarea"
                     value={formData.description}
                     onChange={(e) => handleInputChange('description', e.target.value)}
-                    placeholder="Card description"
+                    placeholder="Card description (supports Markdown)"
                     rows={8}
                   />
-                </div>
+                ) : (
+                  <div className="markdown-preview" style={{ 
+                    minHeight: '200px', 
+                    padding: 'var(--spacing-md)', 
+                    background: 'var(--color-bg-tertiary)', 
+                    borderRadius: 'var(--radius-md)', 
+                    border: '1px solid var(--color-border)' 
+                  }}>
+                    {formData.description ? (
+                      <ReactMarkdown>{formData.description}</ReactMarkdown>
+                    ) : (
+                      <p style={{ color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>No description to preview</p>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Right Column - All Other Fields */}
-              <div className="card-editor-right">
+              {/* Other Fields */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
                 {/* Priority */}
                 <div className="form-group">
-                  <label htmlFor="card-priority">Priority</label>
+                  <label htmlFor="card-priority" className="form-label">Priority</label>
                   <select
                     id="card-priority"
+                    className="form-select"
                     value={formData.priority}
                     onChange={(e) => handleInputChange('priority', e.target.value as Priority)}
                   >
@@ -173,106 +224,111 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 
                 {/* Assigned To */}
                 <div className="form-group">
-                  <label htmlFor="card-assigned">Assigned To</label>
+                  <label htmlFor="card-assigned" className="form-label">Assigned To</label>
                   <input
                     id="card-assigned"
                     type="text"
+                    className="form-input"
                     value={formData.assigned_to}
                     onChange={(e) => handleInputChange('assigned_to', e.target.value)}
                     placeholder="Assignee name"
                   />
                 </div>
+              </div>
 
-                {/* Due Date */}
-                <div className="form-group">
-                  <label htmlFor="card-due-date">Due Date</label>
-                  <input
-                    id="card-due-date"
-                    type="date"
-                    value={formData.due_date}
-                    onChange={(e) => handleInputChange('due_date', e.target.value)}
-                  />
-                  {isOverdue && (
-                    <div className="due-date-warning">
-                      ⚠️ This card is overdue
-                    </div>
-                  )}
-                </div>
-
-                {/* Tags */}
-                {card.tags.length > 0 && (
-                  <div className="form-group">
-                    <label>Tags</label>
-                    <div className="tags">
-                      {card.tags.map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="tag"
-                          style={{ backgroundColor: tag.color }}
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
-                    </div>
+              {/* Due Date */}
+              <div className="form-group">
+                <label htmlFor="card-due-date" className="form-label">Due Date</label>
+                <input
+                  id="card-due-date"
+                  type="date"
+                  className="form-input"
+                  value={formData.due_date}
+                  onChange={(e) => handleInputChange('due_date', e.target.value)}
+                />
+                {isOverdue && (
+                  <div style={{ color: 'var(--color-danger)', fontSize: '0.875rem', marginTop: 'var(--spacing-xs)' }}>
+                    ⚠️ This card is overdue
                   </div>
                 )}
+              </div>
 
-                {/* Card Meta Info */}
-                <div className="card-meta-info">
-                  <div className="meta-item">
+              {/* Tags */}
+              {card.tags.length > 0 && (
+                <div className="form-group">
+                  <label className="form-label">Tags</label>
+                  <div className="card-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-xs)' }}>
+                    {card.tags.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="card-tag"
+                        style={{ backgroundColor: tag.color }}
+                      >
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Card Meta Info */}
+              <div className="form-group">
+                <label className="form-label">Card Information</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                  <div>
                     <strong>Created:</strong> {formatDate(card.created_at)}
                   </div>
-                  <div className="meta-item">
+                  <div>
                     <strong>Updated:</strong> {formatDate(card.updated_at)}
                   </div>
                 </div>
               </div>
-            </div>
           </div>
 
           {/* Comments Section */}
           <div className="comments-section">
-            <h4>Comments ({comments.length})</h4>
+            <h4 className="section-title">Comments ({comments.length})</h4>
             
             {/* Add Comment */}
-            <div className="add-comment">
-              <div className="comment-author-section">
-                <div className="author-input-group">
+            <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+              <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-sm)' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={commentAuthor}
+                  onChange={(e) => setCommentAuthor(e.target.value)}
+                  placeholder="Your name (optional)"
+                  disabled={autoFillAuthor}
+                  style={{ flex: '1' }}
+                />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', fontSize: '0.875rem' }}>
                   <input
-                    type="text"
-                    value={commentAuthor}
-                    onChange={(e) => setCommentAuthor(e.target.value)}
-                    placeholder="Your name (optional)"
-                    className="comment-author-input"
-                    disabled={autoFillAuthor}
+                    type="checkbox"
+                    checked={autoFillAuthor}
+                    onChange={(e) => handleAutoFillToggle(e.target.checked)}
                   />
-                  <label className="auto-fill-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={autoFillAuthor}
-                      onChange={(e) => handleAutoFillToggle(e.target.checked)}
-                    />
-                    <span className="checkbox-label">Auto-fill from profile</span>
-                  </label>
-                </div>
-                {autoFillAuthor && !getUserSettings().name && (
-                  <div className="auto-fill-warning">
-                    <small>💡 Set your name in settings to auto-fill comments</small>
-                  </div>
-                )}
+                  Auto-fill from profile
+                </label>
               </div>
-              <div className="comment-input-group">
+              {autoFillAuthor && !getUserSettings().name && (
+                <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginBottom: 'var(--spacing-sm)' }}>
+                  💡 Set your name in settings to auto-fill comments
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                 <textarea
+                  className="form-textarea"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   placeholder="Add a comment..."
                   rows={3}
-                  className="comment-input"
+                  style={{ flex: '1' }}
                 />
                 <button
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary"
                   onClick={handleAddComment}
                   disabled={!newComment.trim()}
+                  style={{ alignSelf: 'flex-end' }}
                 >
                   Add Comment
                 </button>
@@ -280,28 +336,38 @@ export const CardEditor: React.FC<CardEditorProps> = ({
             </div>
 
             {/* Comments List */}
-            <div className="comments-list">
+            <div>
               {comments.length === 0 ? (
-                <div className="no-comments">No comments yet</div>
+                <div style={{ color: 'var(--color-text-tertiary)', textAlign: 'center', padding: 'var(--spacing-lg)', fontStyle: 'italic' }}>
+                  No comments yet
+                </div>
               ) : (
                 comments.map((comment) => (
-                  <div key={comment.id} className="comment-item">
-                    <div className="comment-header">
-                      <span className="comment-author">
+                  <div key={comment.id} style={{ 
+                    background: 'var(--color-bg-tertiary)', 
+                    border: '1px solid var(--color-border)', 
+                    borderRadius: 'var(--radius-md)', 
+                    padding: 'var(--spacing-md)', 
+                    marginBottom: 'var(--spacing-sm)' 
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-xs)' }}>
+                      <span style={{ fontWeight: '500', color: 'var(--color-text-primary)' }}>
                         {comment.author || 'Anonymous'}
                       </span>
-                      <span className="comment-date">
-                        {formatDate(comment.created_at)}
-                      </span>
-                      <button
-                        className="btn-icon comment-delete"
-                        onClick={() => onDeleteComment(comment.id)}
-                        title="Delete comment"
-                      >
-                        🗑️
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                          {formatDate(comment.created_at)}
+                        </span>
+                        <button
+                          className="btn-icon"
+                          onClick={() => onDeleteComment(comment.id)}
+                          title="Delete comment"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                    <div className="comment-content">
+                    <div style={{ color: 'var(--color-text-secondary)' }}>
                       {comment.content}
                     </div>
                   </div>
@@ -313,9 +379,9 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 
         {/* Modal Actions */}
         <div className="modal-footer">
-          <div className="footer-left">
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
             <button
-              className={`btn ${showDeleteConfirm ? 'btn-danger-confirm' : 'btn-danger'}`}
+              className={`btn ${showDeleteConfirm ? 'btn-danger' : 'btn-danger'}`}
               onClick={showDeleteConfirm ? handleDelete : () => setShowDeleteConfirm(true)}
             >
               {showDeleteConfirm ? 'Confirm Delete' : 'Delete Card'}
@@ -325,12 +391,12 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                 className="btn btn-secondary"
                 onClick={() => setShowDeleteConfirm(false)}
               >
-                Cancel
+                Cancel Delete
               </button>
             )}
           </div>
-          <div className="footer-right">
-            <button className="btn btn-secondary" onClick={onClose}>
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+            <button className="btn btn-secondary" onClick={handleClose}>
               Cancel
             </button>
             <button 
@@ -343,6 +409,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

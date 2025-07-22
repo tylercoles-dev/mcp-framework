@@ -33,21 +33,23 @@
   "dependencies": {
     "@tylercoles/mcp-server": "0.2.2",
     "@tylercoles/mcp-transport-http": "0.2.2",
-    "kysely": "^0.27.3",
     "better-sqlite3": "^9.2.2",
-    "pg": "^8.11.3",
+    "kysely": "^0.27.3",
+    "marked": "^16.1.1",
     "mysql2": "^3.6.5",
-    "zod": "^3.25.76",
-    "ws": "^8.16.0"
+    "pg": "^8.11.3",
+    "ws": "^8.16.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
+    "@types/marked": "^5.0.2",
     "@types/node": "^20.10.5",
     "@types/pg": "^8.10.9",
     "@types/ws": "^8.5.10",
+    "concurrently": "^8.2.2",
     "tsx": "^4.6.2",
-    "typescript": "^5.3.3",
-    "concurrently": "^8.2.2"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"

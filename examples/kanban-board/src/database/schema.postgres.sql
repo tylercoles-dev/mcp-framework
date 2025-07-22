@@ -106,3 +106,10 @@ INSERT INTO card_tags (card_id, tag_id) VALUES
 (5, 5), -- Learn MCP protocol -> documentation
 (6, 4)  -- Practice TypeScript -> enhancement
 ON CONFLICT (card_id, tag_id) DO NOTHING;
+
+-- Fix sequence values to match the inserted data
+SELECT setval('boards_id_seq', (SELECT MAX(id) FROM boards));
+SELECT setval('columns_id_seq', (SELECT MAX(id) FROM columns));
+SELECT setval('cards_id_seq', (SELECT MAX(id) FROM cards));
+SELECT setval('tags_id_seq', (SELECT MAX(id) FROM tags));
+SELECT setval('comments_id_seq', (SELECT MAX(id) FROM comments));
