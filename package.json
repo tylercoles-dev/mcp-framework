@@ -7,7 +7,6 @@
     "type": "git",
     "url": "git+https://github.com/tylercoles-dev/mcp-framework.git"
   },
-  "type": "module",
   "keywords": [
     "mcp",
     "model-context-protocol",

@@ -2,9 +2,9 @@
 
 import { MCPServer, LogLevel } from '@tylercoles/mcp-server';
 import { HttpTransport } from '@tylercoles/mcp-transport-http';
-import { KanbanDatabase, DatabaseConfig } from './database/index';
-import { registerTools } from './tools';
-import { KanbanWebSocketServer } from './websocket-server';
+import { KanbanDatabase, DatabaseConfig } from './database/index.js';
+import { registerTools } from './tools/index.js';
+import { KanbanWebSocketServer } from './websocket-server.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -392,6 +392,32 @@ Use the kanban tools to analyze the current state and provide recommendations.`,
 
   server.useTransport(httpTransport);
 
+  // Wait for the transport to start before adding static file routes
+  await server.start();
+  
+  // Serve static frontend files
+  const frontendPath = path.join(__dirname, 'frontend');
+  const app = httpTransport.getApp();
+  if (app) {
+    // Import express here to avoid circular dependency
+    const express = await import('express');
+    const { Router } = express.default;
+    
+    // Create a router for static files
+    const staticRouter = Router();
+    
+    // Serve static files from the frontend build
+    staticRouter.use(express.default.static(frontendPath));
+    
+    // Fallback to index.html for client-side routing
+    staticRouter.get('*', (req: any, res: any) => {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    });
+    
+    // Register the static router at root path
+    httpTransport.registerRouter('/', staticRouter, false);
+  }
+
   // Setup graceful shutdown
   const shutdown = async () => {
     console.log('\n🛑 Shutting down server...');
@@ -414,8 +440,6 @@ async function main() {
     console.log(`🔌 WebSocket Server: ws://${config.host}:${config.wsPort}`);
 
     const { server, db, wsServer } = await createKanbanServer();
-
-    await server.start();
 
     console.log('✅ Kanban Board MCP Server is running!');
     console.log('\n📚 Available endpoints:');

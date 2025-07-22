@@ -87,8 +87,10 @@ export interface DatabaseConfig {
 
 export class KanbanDatabase {
   private db: Kysely<Database>;
+  private dbType: string;
 
   constructor(config: DatabaseConfig) {
+    this.dbType = config.type;
     let dialect;
 
     switch (config.type) {
@@ -144,8 +146,16 @@ export class KanbanDatabase {
   }
 
   async initialize(): Promise<void> {
-    // Read and execute schema
-    const schemaPath = path.join(__dirname, 'schema.sql');
+    // Read and execute schema - use database-specific schema if available
+    let schemaPath: string;
+    if (this.dbType === 'postgres') {
+      schemaPath = path.join(__dirname, 'schema.postgres.sql');
+    } else if (this.dbType === 'mysql') {
+      schemaPath = path.join(__dirname, 'schema.mysql.sql');
+    } else {
+      schemaPath = path.join(__dirname, 'schema.sql');
+    }
+    
     const schema = fs.readFileSync(schemaPath, 'utf-8');
 
     // Split by statements and execute each

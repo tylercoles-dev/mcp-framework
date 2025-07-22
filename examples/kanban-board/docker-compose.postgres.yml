@@ -5,12 +5,13 @@ services:
     build:
       context: .
       target: production
-    container_name: kanban-board-prod
     ports:
       - "3001:3001"
+      - "3002:3002"
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - WS_PORT=3002
       - HOST=0.0.0.0
       - DB_TYPE=postgres
       - DATABASE_URL=postgresql://kanban_user:kanban_pass@postgres:5432/kanban_db
@@ -23,7 +24,7 @@ services:
       # Persistent logs
       - kanban_logs:/app/logs
       # Configuration
-      - ./config:/app/config:ro
+      # - ./config:/app/config:ro
     depends_on:
       postgres:
         condition: service_healthy

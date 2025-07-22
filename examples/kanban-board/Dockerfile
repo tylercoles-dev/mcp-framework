@@ -71,8 +71,8 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 
-# Copy database schema
-COPY --from=build /app/src/database/schema.sql ./dist/database/schema.sql
+# Copy database schemas
+COPY --from=build /app/src/database/*.sql ./dist/database/
 
 # Create directories and set permissions
 RUN mkdir -p /app/data /app/logs

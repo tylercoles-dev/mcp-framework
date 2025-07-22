@@ -3,6 +3,10 @@
 
 services:
   kanban-board:
+    build:
+      context: .
+      target: development
+    container_name: kanban-board-dev
     # Enable development mode with hot reload
     command: npm run dev:all
     environment:
@@ -10,8 +14,10 @@ services:
       - DEBUG=kanban:*
     # Enable debugging
       - NODE_OPTIONS=--inspect=0.0.0.0:9229
-    # Mount source code for live reload
+      - DB_TYPE=sqlite
+      - DB_FILE=/app/data/kanban-dev.db
     volumes:
+    # Mount source code for live reload
       - .:/app
       - /app/node_modules
       - /app/frontend/node_modules

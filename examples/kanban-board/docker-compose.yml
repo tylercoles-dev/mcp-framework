@@ -2,24 +2,14 @@
 
 services:
   kanban-board:
-    build:
-      context: .
-      target: development
-    container_name: kanban-board-dev
+    container_name: kanban-board
     ports:
       - "3001:3001"
       - "5173:5173"  # Vite dev server port
     environment:
-      - NODE_ENV=development
       - PORT=3001
       - HOST=0.0.0.0
-      - DB_TYPE=sqlite
-      - DB_FILE=/app/data/kanban-dev.db
     volumes:
-      # Mount source code for hot reload
-      - .:/app
-      - /app/node_modules
-      - /app/frontend/node_modules
       # Persistent database storage
       - kanban_data:/app/data
       # Development logs
